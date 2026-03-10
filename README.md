@@ -1,4 +1,4 @@
-# Algo Backtester Webserver (professor tour)
+# Algo Backtester Webserver (Tour)
 Node + Express front end for the Java moving-average backtester. Users upload a CSV, pick fast/slow MA windows, and the server spawns the Java JAR to calculate signals and metrics, then renders the results with Pug templates.
 
 ## Quick start (what to run)
