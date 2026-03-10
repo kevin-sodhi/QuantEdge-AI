@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuantEdge — Algorithmic Trading Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #080a0e;
+    --deep: #0c0f15;
+    --panel: #111620;
+    --border: #1e2535;
+    --green: #00ff88;
+    --green-dim: #00cc6a;
+    --green-glow: rgba(0,255,136,0.12);
+    --red: #ff3d5a;
+    --amber: #ffb547;
+    --blue: #4d9fff;
+    --text: #c8d4e8;
+    --muted: #5a6a82;
+    --white: #f0f4ff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--black);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  .cursor {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    transition: transform 0.1s;
+    box-shadow: 0 0 12px var(--green);
+  }
+  .cursor-ring {
+    width: 32px; height: 32px;
+    border: 1px solid rgba(0,255,136,0.4);
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    z-index: 9998;
+    transition: all 0.15s ease;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 99;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 48px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(8,10,14,0.85);
+    backdrop-filter: blur(20px);
+  }
+
+  .nav-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 3px;
+    color: var(--white);
+  }
+  .nav-logo span { color: var(--green); }
+
+  .nav-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+  }
+  .nav-links a {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--green); }
+
+  /* TICKER TAPE */
+  .ticker-wrap {
+    position: fixed;
+    top: 73px;
+    left: 0; right: 0;
+    z-index: 199;
+    overflow: hidden;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 0;
+  }
+  .ticker-track {
+    display: flex;
+    gap: 0;
+    animation: ticker 30s linear infinite;
+    white-space: nowrap;
+  }
+  .ticker-item {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-right: 1px solid var(--border);
+  }
+  .ticker-item .sym { color: var(--white); font-weight: 700; }
+  .ticker-item .price { color: var(--muted); }
+  .ticker-item .up { color: var(--green); }
+  .ticker-item .down { color: var(--red); }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    padding: 160px 48px 80px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 70% 50%, rgba(0,255,136,0.04) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 20% 80%, rgba(77,159,255,0.04) 0%, transparent 60%);
+  }
+
+  /* Animated grid */
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.4;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+  }
+
+  .hero-left { position: relative; z-index: 2; }
+
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    border: 1px solid rgba(0,255,136,0.3);
+    padding: 6px 14px;
+    margin-bottom: 32px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .hero-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(64px, 8vw, 112px);
+    line-height: 0.92;
+    color: var(--white);
+    letter-spacing: 2px;
+    margin-bottom: 24px;
+  }
+  .hero-title .accent { color: var(--green); }
+  .hero-title .outline {
+    -webkit-text-stroke: 1px rgba(240,244,255,0.3);
+    color: transparent;
+  }
+
+  .hero-sub {
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 420px;
+    margin-bottom: 40px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .btn-primary {
+    background: var(--green);
+    color: var(--black);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 14px 28px;
+    border: none;
+    cursor: none;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: white;
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  .btn-primary:hover::before { transform: translateX(0); opacity: 0.1; }
+  .btn-primary:hover { box-shadow: 0 0 30px rgba(0,255,136,0.4); transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 14px 28px;
+    border: 1px solid var(--border);
+    cursor: none;
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover { border-color: var(--green); color: var(--green); }
+
+  /* HERO RIGHT — Terminal */
+  .hero-right {
+    position: relative;
+    z-index: 2;
+    animation: fadeUp 0.8s ease 0.3s both;
+  }
+
+  .terminal {
+    background: var(--deep);
+    border: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+  }
+
+  .terminal-bar {
+    background: var(--panel);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .t-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .t-dot.r { background: #ff5f57; }
+  .t-dot.y { background: #febc2e; }
+  .t-dot.g { background: #28c840; }
+  .t-title { color: var(--muted); font-size: 11px; margin-left: 8px; letter-spacing: 1px; }
+
+  .terminal-body { padding: 20px; line-height: 2; }
+  .t-line { display: flex; gap: 12px; }
+  .t-prompt { color: var(--green); }
+  .t-cmd { color: var(--white); }
+  .t-out { color: var(--muted); padding-left: 24px; }
+  .t-val { color: var(--green); }
+  .t-val.red { color: var(--red); }
+  .t-val.amber { color: var(--amber); }
+  .t-val.blue { color: var(--blue); }
+  .t-section { color: var(--blue); padding-left: 24px; margin-top: 4px; }
+  .t-cursor {
+    display: inline-block;
+    width: 8px; height: 14px;
+    background: var(--green);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  /* STATS BAR */
+  .stats-bar {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 48px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+  }
+  .stat-item {
+    padding: 0 32px;
+    border-right: 1px solid var(--border);
+  }
+  .stat-item:first-child { padding-left: 0; }
+  .stat-item:last-child { border-right: none; }
+  .stat-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: var(--white);
+  }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-delta {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--green);
+    margin-top: 2px;
+  }
+  .stat-delta.neg { color: var(--red); }
+
+  /* FEATURES */
+  .features {
+    padding: 100px 48px;
+    position: relative;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 60px;
+  }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--green);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px;
+    color: var(--white);
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+
+  .section-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 120px;
+    color: var(--border);
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .feature-card {
+    background: var(--deep);
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.3s;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    transform: scaleX(0);
+    transition: transform 0.4s;
+  }
+  .feature-card:hover { background: var(--panel); }
+  .feature-card:hover::before { transform: scaleX(1); }
+
+  .feature-icon {
+    width: 40px; height: 40px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    font-size: 18px;
+  }
+
+  .feature-num {
+    position: absolute;
+    top: 24px; right: 32px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    color: var(--border);
+    letter-spacing: 1px;
+  }
+
+  .feature-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--white);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  .feature-desc {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .feature-tag {
+    display: inline-block;
+    margin-top: 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--green);
+    border: 1px solid rgba(0,255,136,0.2);
+    padding: 4px 10px;
+    letter-spacing: 1px;
+  }
+
+  /* SIGNAL SECTION */
+  .signal-section {
+    padding: 100px 48px;
+    background: var(--deep);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+  }
+
+  .signal-display {
+    background: var(--black);
+    border: 1px solid var(--border);
+    padding: 32px;
+  }
+
+  .signal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .signal-title-sm {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--green);
+  }
+
+  .signal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(30,37,53,0.5);
+  }
+
+  .signal-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .signal-bar-wrap {
+    flex: 1;
+    margin: 0 20px;
+    height: 4px;
+    background: var(--border);
+    position: relative;
+  }
+
+  .signal-bar-fill {
+    height: 100%;
+    background: var(--green);
+    transition: width 1s ease;
+  }
+  .signal-bar-fill.neg { background: var(--red); }
+  .signal-bar-fill.neutral { background: var(--amber); }
+
+  .signal-score {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 48px;
+    text-align: right;
+  }
+  .signal-score.pos { color: var(--green); }
+  .signal-score.neg { color: var(--red); }
+  .signal-score.neutral { color: var(--amber); }
+
+  .signal-final {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--green-glow);
+    border: 1px solid rgba(0,255,136,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .signal-final-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 2px;
+  }
+
+  .signal-final-action {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    color: var(--green);
+    letter-spacing: 3px;
+  }
+
+  /* CHART PREVIEW */
+  .chart-preview {
+    width: 100%;
+    height: 80px;
+    position: relative;
+    margin: 20px 0 10px;
+  }
+
+  .chart-preview svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* CTA */
+  .cta-section {
+    padding: 120px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-bg {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(0,255,136,0.05) 0%, transparent 70%);
+  }
+
+  .cta-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 7vw, 96px);
+    color: var(--white);
+    letter-spacing: 3px;
+    line-height: 0.95;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .cta-title .green { color: var(--green); }
+
+  .cta-sub {
+    font-size: 16px;
+    color: var(--muted);
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .cta-input-wrap {
+    display: flex;
+    gap: 0;
+    max-width: 480px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  .cta-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-right: none;
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    padding: 14px 20px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .cta-input:focus { border-color: var(--green); }
+  .cta-input::placeholder { color: var(--muted); }
+
+  /* FOOTER */
+  footer {
+    padding: 32px 48px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    color: var(--muted);
+  }
+  .footer-logo span { color: var(--green); }
+
+  .footer-copy {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 24px;
+    list-style: none;
+  }
+  .footer-links a {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .footer-links a:hover { color: var(--green); }
+
+  /* ANIMATIONS */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+    50% { opacity: 0.4; box-shadow: none; }
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .animate-1 { animation: fadeUp 0.7s ease 0.1s both; }
+  .animate-2 { animation: fadeUp 0.7s ease 0.2s both; }
+  .animate-3 { animation: fadeUp 0.7s ease 0.3s both; }
+  .animate-4 { animation: fadeUp 0.7s ease 0.4s both; }
+  .animate-5 { animation: fadeUp 0.7s ease 0.5s both; }
+
+  /* Mini sparkline */
+  .sparkline { display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">QUANT<span>EDGE</span></div>
+  <div class="nav-status">
+    <div class="status-dot"></div>
+    MARKETS OPEN · NYSE · TSX
+  </div>
+  <ul class="nav-links">
+    <li><a href="#">Platform</a></li>
+    <li><a href="#">Strategies</a></li>
+    <li><a href="#">Research</a></li>
+    <li><a href="#">Docs</a></li>
+    <li><a href="#">Launch App →</a></li>
+  </ul>
+</nav>
+
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker-track" id="ticker">
+    <div class="ticker-item"><span class="sym">AAPL</span><span class="price">189.42</span><span class="up">▲ +1.24%</span></div>
+    <div class="ticker-item"><span class="sym">MSFT</span><span class="price">374.18</span><span class="up">▲ +0.87%</span></div>
+    <div class="ticker-item"><span class="sym">NVDA</span><span class="price">721.33</span><span class="up">▲ +2.41%</span></div>
+    <div class="ticker-item"><span class="sym">TSLA</span><span class="price">248.50</span><span class="down">▼ -1.12%</span></div>
+    <div class="ticker-item"><span class="sym">GOOGL</span><span class="price">140.22</span><span class="up">▲ +0.54%</span></div>
+    <div class="ticker-item"><span class="sym">META</span><span class="price">487.91</span><span class="up">▲ +1.88%</span></div>
+    <div class="ticker-item"><span class="sym">AMZN</span><span class="price">178.65</span><span class="down">▼ -0.33%</span></div>
+    <div class="ticker-item"><span class="sym">JPM</span><span class="price">194.20</span><span class="up">▲ +0.61%</span></div>
+    <div class="ticker-item"><span class="sym">BTC/USD</span><span class="price">67,412</span><span class="up">▲ +3.22%</span></div>
+    <div class="ticker-item"><span class="sym">SPY</span><span class="price">521.44</span><span class="up">▲ +0.47%</span></div>
+    <!-- Duplicate for seamless loop -->
+    <div class="ticker-item"><span class="sym">AAPL</span><span class="price">189.42</span><span class="up">▲ +1.24%</span></div>
+    <div class="ticker-item"><span class="sym">MSFT</span><span class="price">374.18</span><span class="up">▲ +0.87%</span></div>
+    <div class="ticker-item"><span class="sym">NVDA</span><span class="price">721.33</span><span class="up">▲ +2.41%</span></div>
+    <div class="ticker-item"><span class="sym">TSLA</span><span class="price">248.50</span><span class="down">▼ -1.12%</span></div>
+    <div class="ticker-item"><span class="sym">GOOGL</span><span class="price">140.22</span><span class="up">▲ +0.54%</span></div>
+    <div class="ticker-item"><span class="sym">META</span><span class="price">487.91</span><span class="up">▲ +1.88%</span></div>
+    <div class="ticker-item"><span class="sym">AMZN</span><span class="price">178.65</span><span class="down">▼ -0.33%</span></div>
+    <div class="ticker-item"><span class="sym">JPM</span><span class="price">194.20</span><span class="up">▲ +0.61%</span></div>
+    <div class="ticker-item"><span class="sym">BTC/USD</span><span class="price">67,412</span><span class="up">▲ +3.22%</span></div>
+    <div class="ticker-item"><span class="sym">SPY</span><span class="price">521.44</span><span class="up">▲ +0.47%</span></div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+
+  <div class="hero-left">
+    <div class="hero-tag animate-1">
+      <div class="status-dot"></div>
+      Algorithmic Trading Research Platform
+    </div>
+    <h1 class="hero-title animate-2">
+      TRADE<br>
+      <span class="accent">SMARTER</span><br>
+      <span class="outline">NOT HARDER</span>
+    </h1>
+    <p class="hero-sub animate-3">
+      Institutional-grade backtesting with ML signal generation and real-time NLP sentiment analysis. Built for quant researchers who demand edge.
+    </p>
+    <div class="hero-actions animate-4">
+      <button class="btn-primary">Launch Platform</button>
+      <button class="btn-ghost">View Strategies →</button>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="t-dot r"></div>
+        <div class="t-dot y"></div>
+        <div class="t-dot g"></div>
+        <span class="t-title">quantedge — backtest_engine.py</span>
+      </div>
+      <div class="terminal-body">
+        <div class="t-line"><span class="t-prompt">›</span><span class="t-cmd">run backtest --ticker AAPL --strategy momentum_ml</span></div>
+        <div class="t-line"><span class="t-out">Fetching real-time data via yfinance...</span></div>
+        <div class="t-line"><span class="t-out">Period: <span class="t-val">2022-01-01 → 2024-01-01</span></span></div>
+        <div class="t-line"><span class="t-out">Strategy: <span class="t-val blue">Momentum + ML Signal</span></span></div>
+        <div class="t-line"><span class="t-out">Sentiment layer: <span class="t-val blue">FinBERT active</span></span></div>
+        <br>
+        <div class="t-line"><span class="t-section">── Results ──────────────────────</span></div>
+        <div class="t-line"><span class="t-out">Total Return: <span class="t-val">+34.7%</span></span></div>
+        <div class="t-line"><span class="t-out">Sharpe Ratio: <span class="t-val">1.84</span></span></div>
+        <div class="t-line"><span class="t-out">Max Drawdown: <span class="t-val red">-8.2%</span></span></div>
+        <div class="t-line"><span class="t-out">Win Rate: <span class="t-val">67.3%</span></span></div>
+        <div class="t-line"><span class="t-out">Sentiment Score: <span class="t-val amber">+0.64 (bullish)</span></span></div>
+        <br>
+        <div class="t-line"><span class="t-prompt">›</span><span class="t-cmd">_<span class="t-cursor"></span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-label">Strategies Available</div>
+    <div class="stat-value green">12+</div>
+    <div class="stat-delta">↑ ML-powered</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">Avg Sharpe Ratio</div>
+    <div class="stat-value">1.74</div>
+    <div class="stat-delta">↑ Risk-adjusted</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">Data Sources</div>
+    <div class="stat-value green">Live</div>
+    <div class="stat-delta">yfinance + Alpaca</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">NLP Model</div>
+    <div class="stat-value">FinBERT</div>
+    <div class="stat-delta">Sentiment scoring</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">Execution Engine</div>
+    <div class="stat-value">Java</div>
+    <div class="stat-delta">High performance</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="section-header">
+    <div>
+      <div class="section-label">Core Capabilities</div>
+      <div class="section-title">WHAT WE DO</div>
+    </div>
+    <div class="section-num">01</div>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-num">01</div>
+      <div class="feature-icon">📈</div>
+      <div class="feature-title">Price Strategy Engine</div>
+      <div class="feature-desc">Momentum, mean reversion, and factor-based strategies powered by a high-performance Java execution engine. Walk-forward validated.</div>
+      <div class="feature-tag">Java Backend</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">02</div>
+      <div class="feature-icon">🧠</div>
+      <div class="feature-title">ML Signal Generation</div>
+      <div class="feature-desc">XGBoost classifiers and LSTM sequence models trained on OHLCV features. Regime detection adapts strategy behavior to market conditions.</div>
+      <div class="feature-tag">Python · PyTorch</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">03</div>
+      <div class="feature-icon">💬</div>
+      <div class="feature-title">NLP Sentiment Layer</div>
+      <div class="feature-desc">FinBERT scores earnings transcripts and financial news in real time. Sentiment delta across quarters becomes a tradeable signal.</div>
+      <div class="feature-tag">FinBERT · HuggingFace</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">04</div>
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Real-Time Data Feed</div>
+      <div class="feature-desc">No CSV uploads. Pull live OHLCV data for any ticker via yfinance and Alpaca. Intraday to multi-year historical available instantly.</div>
+      <div class="feature-tag">yfinance · Alpaca API</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">05</div>
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Portfolio Optimizer</div>
+      <div class="feature-desc">Markowitz mean-variance optimization with Sharpe maximization. Compare strategy performance side-by-side with full risk metrics.</div>
+      <div class="feature-tag">NumPy · SciPy</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">06</div>
+      <div class="feature-icon">🔬</div>
+      <div class="feature-title">Research Dashboard</div>
+      <div class="feature-desc">TradingView-grade charts, live P&L curves, sentiment visualization, and signal explainability. Built for research, not just results.</div>
+      <div class="feature-tag">React · Lightweight Charts</div>
+    </div>
+  </div>
+</section>
+
+<!-- SIGNAL SECTION -->
+<section class="signal-section">
+  <div>
+    <div class="section-label">Dual Signal Architecture</div>
+    <div class="section-title" style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--white);letter-spacing:2px;line-height:1;margin-bottom:20px;">PRICE MEETS<br><span style="color:var(--green);">SENTIMENT</span></div>
+    <p style="color:var(--muted);font-size:15px;line-height:1.8;margin-bottom:24px;max-width:400px;">Two independent signal layers that reinforce or cancel each other. When price momentum and sentiment align, conviction is highest. When they conflict, we stay out.</p>
+    <p style="font-family:'Space Mono',monospace;font-size:12px;color:var(--green);">This is how institutional quant funds trade.</p>
+  </div>
+
+  <div class="signal-display">
+    <div class="signal-header">
+      <div class="signal-title-sm">AAPL · Signal Analysis · Live</div>
+      <div class="live-badge"><div class="status-dot"></div>COMPUTING</div>
+    </div>
+
+    <div class="signal-row">
+      <div class="signal-name">Momentum Score</div>
+      <div class="signal-bar-wrap"><div class="signal-bar-fill" style="width:78%"></div></div>
+      <div class="signal-score pos">+0.78</div>
+    </div>
+    <div class="signal-row">
+      <div class="signal-name">ML Classifier</div>
+      <div class="signal-bar-wrap"><div class="signal-bar-fill" style="width:65%"></div></div>
+      <div class="signal-score pos">+0.65</div>
+    </div>
+    <div class="signal-row">
+      <div class="signal-name">LSTM Prediction</div>
+      <div class="signal-bar-wrap"><div class="signal-bar-fill" style="width:55%"></div></div>
+      <div class="signal-score pos">+0.55</div>
+    </div>
+    <div class="signal-row">
+      <div class="signal-name">FinBERT Sentiment</div>
+      <div class="signal-bar-wrap"><div class="signal-bar-fill neutral" style="width:40%"></div></div>
+      <div class="signal-score neutral">+0.40</div>
+    </div>
+    <div class="signal-row">
+      <div class="signal-name">Earnings Tone Delta</div>
+      <div class="signal-bar-wrap"><div class="signal-bar-fill" style="width:70%"></div></div>
+      <div class="signal-score pos">+0.70</div>
+    </div>
+
+    <div class="signal-final">
+      <div>
+        <div class="signal-title-sm" style="margin-bottom:4px;">COMBINED SIGNAL</div>
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">Weighted score: +0.616</div>
+      </div>
+      <div class="signal-final-action">LONG ↑</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-bg"></div>
+  <div class="cta-title">
+    FIND YOUR<br><span class="green">EDGE</span>
+  </div>
+  <p class="cta-sub">Enter any ticker. Run any strategy. See the signal breakdown in seconds.</p>
+  <div class="cta-input-wrap">
+    <input class="cta-input" placeholder="Enter ticker symbol (e.g. AAPL)" type="text">
+    <button class="btn-primary">RUN BACKTEST</button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">QUANT<span>EDGE</span></div>
+  <div class="footer-copy">© 2024 · Research & Simulation Platform · Not Financial Advice</div>
+  <ul class="footer-links">
+    <li><a href="#">GitHub</a></li>
+    <li><a href="#">Docs</a></li>
+    <li><a href="#">API</a></li>
+  </ul>
+</footer>
+
+<script>
+  // Custom cursor
+  const cursor = document.getElementById('cursor');
+  const ring = document.getElementById('cursorRing');
+  let mx = 0, my = 0, rx = 0, ry = 0;
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    cursor.style.left = mx - 4 + 'px';
+    cursor.style.top = my - 4 + 'px';
+  });
+
+  function animateRing() {
+    rx += (mx - rx - 16) * 0.12;
+    ry += (my - ry - 16) * 0.12;
+    ring.style.left = rx + 'px';
+    ring.style.top = ry + 'px';
+    requestAnimationFrame(animateRing);
+  }
+  animateRing();
+
+  // Animate signal bars on scroll
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.animation = 'fadeUp 0.6s ease both';
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.feature-card, .stat-item').forEach(el => observer.observe(el));
+
+  // Randomize ticker prices slightly
+  setInterval(() => {
+    document.querySelectorAll('.ticker-item').forEach(item => {
+      const priceEl = item.querySelector('.price');
+      const changeEl = item.querySelector('.up, .down');
+      if (priceEl && changeEl && Math.random() > 0.7) {
+        const current = parseFloat(priceEl.textContent.replace(',', ''));
+        const delta = (Math.random() - 0.48) * 0.5;
+        const newPrice = current + delta;
+        priceEl.textContent = newPrice > 1000
+          ? Math.round(newPrice).toLocaleString()
+          : newPrice.toFixed(2);
+      }
+    });
+  }, 2000);
+</script>
+</body>
+</html>

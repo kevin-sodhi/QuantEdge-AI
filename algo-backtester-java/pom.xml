@@ -1,0 +1,70 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.kevin.algo</groupId>
+  <artifactId>algo-backtester-java</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>Algorithmic Backtester (Java)</name>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+  </properties>
+
+  <dependencies>
+    <!-- Gson for JSON output -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.11.0</version>
+    </dependency>
+
+    <!-- keep JUnit but move to modern 5.x if you plan to test later -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.11.3</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-csv</artifactId>
+      <version>1.11.0</version>
+  </dependency>
+
+  </dependencies>
+
+
+  <build>
+    <plugins>
+      <!-- bundle everything into one runnable jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.7.1</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.kevin.algo.cli.Main</mainClass>
+            </manifest>
+          </archive>
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+        </configuration>
+        <executions>
+          <execution>
+            <id>make-assembly</id>
+            <phase>package</phase>
+            <goals><goal>single</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

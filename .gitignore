@@ -1,0 +1,18 @@
+# OS
+.DS_Store
+.idea/
+
+# Node
+Algo-backtester-webserver/node_modules/
+Algo-backtester-webserver/npm-debug.log*
+
+# Sensitive / secrets
+Algo-backtester-webserver/credentials.js
+Algo-backtester-webserver/cert.pem
+Algo-backtester-webserver/key.pem
+
+# Java build output
+algo-backtester-java/target/
+
+# Data (optional — remove this line if you want to track data files)
+data/

@@ -1,0 +1,712 @@
+================================================================
+QUANTEDGE — FULL INTEGRATION PLAN
+Algorithmic Trading Research Platform
+================================================================
+This document covers everything being integrated into the project,
+in the exact order it should be built. Read this before starting
+any new feature. Every section depends on the one before it.
+================================================================
+
+
+----------------------------------------------------------------
+CURRENT STATE
+----------------------------------------------------------------
+What is already built:
+- Java execution engine (JAR) — runs backtests on historical data
+- Node.js / Express web layer — connects frontend to Java engine
+- MongoDB — user accounts and strategy data persistence
+- Moving average crossover strategy — AI generated, now being read
+  and understood by owner
+- CSV-based data input — being replaced with real-time feeds
+- Session-based authentication + HTTPS
+
+What is NOT done yet:
+- Owner has not fully read and understood all existing code
+- No Python layer exists yet
+- No real-time data feed
+- No ML models
+- No NLP or sentiment analysis
+- No deployment
+
+Current phase: PHASE 0 — reading and understanding all code
+Do not add anything new until Phase 0 is complete.
+
+
+----------------------------------------------------------------
+PHASE 0 — UNDERSTAND EXISTING CODE (YOU ARE HERE)
+----------------------------------------------------------------
+Goal: Be able to explain every line of the existing codebase out
+loud without looking at it. This is non-negotiable before moving on.
+
+What to understand:
+- How the Java engine reads price data
+- How the moving average crossover strategy generates signals
+- How buy/sell decisions are made
+- How portfolio state is tracked (daily, not per-trade)
+- How cumulative return is calculated (single final value)
+- How JSON output is structured and consumed by Node layer
+- How Node/Express APIs trigger the Java JAR
+- How MongoDB stores strategy results and user data
+
+Key corrections found while reading:
+- Portfolio value is tracked daily, not after every trade
+- Cumulative return is a single final percentage, not running
+- Per-trade P&L is calculated but NOT included in JSON output
+  (fix this — it should be in the output, 30 min of work)
+
+Timeline: 1-2 weeks
+
+
+----------------------------------------------------------------
+PHASE 1 — OWN THE STRATEGY LAYER
+----------------------------------------------------------------
+Goal: Implement new strategies yourself, no AI writing the logic.
+This is what proves you own the codebase.
+
+Strategies to implement (write these yourself):
+
+1. Momentum Strategy
+   - 50-day EMA crosses above 200-day EMA (golden cross)
+   - RSI between 50 and 70 (bullish, not overbought)
+   - Volume above 20-day average (confirms the move)
+   - Signal: BUY when all three conditions met
+
+2. Mean Reversion Strategy
+   - Price touches or breaks lower Bollinger Band
+   - RSI below 30 (oversold condition)
+   - Signal: BUY expecting price to revert to mean
+   - Signal: SELL when price returns to middle Bollinger Band
+
+3. Fix per-trade P&L output
+   - Add per-trade P&L to JSON output from Java engine
+   - Small fix, do it while reading the code
+
+Also add in Phase 1:
+- Walk-forward validation
+  - Split data into training period and testing period
+  - Train strategy params on period A, test on period B
+  - Prevents overfitting to one historical period
+  - This is mandatory for any serious backtest
+
+Replace CSV uploads:
+- Integrate yfinance Python library
+- One function call gets any ticker, any period, live OHLCV data
+- Example: ticker.history(period="1y", interval="1d")
+- No more uploading CSV files manually
+- This requires the Python service to exist (see Phase 2)
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 2 — PYTHON FASTAPI SERVICE
+----------------------------------------------------------------
+Goal: Build the Python intelligence layer that sits alongside
+the Java backend. This is where all ML, NLP, and smart logic lives.
+
+Why Python and not Java:
+- Industry standard for ML and data science
+- All major ML libraries (PyTorch, scikit-learn, XGBoost) are Python
+- FinBERT and HuggingFace models are Python-native
+- yfinance, pandas, numpy are Python
+- Java handles execution and performance, Python handles intelligence
+
+Service setup:
+- FastAPI framework (fast, modern, automatic API docs)
+- Runs on port 8000
+- Java backend calls it via REST when it needs ML or sentiment signals
+- Completely independent service — can be developed separately
+
+Endpoints to build in Phase 2:
+- GET /health — service is running check
+- GET /data?ticker=AAPL&period=1y — fetch live OHLCV via yfinance
+- GET /indicators?ticker=AAPL — compute technical indicators
+- GET /price-signal?ticker=AAPL&strategy=momentum — run strategy,
+  return signal score from -1.0 to +1.0
+
+Technical indicators to compute:
+- RSI (Relative Strength Index) — overbought/oversold 0-100
+- MACD (Moving Average Convergence Divergence) — momentum shift
+- EMA/SMA crossover — 50-day vs 200-day trend direction
+- Bollinger Bands — volatility and mean reversion zones
+- ATR (Average True Range) — volatility for position sizing
+- Volume ratio — current volume vs 20-day average
+
+Libraries:
+- fastapi, uvicorn — web framework
+- yfinance — real-time market data
+- pandas, numpy — data manipulation
+- ta (technical analysis library) — indicator computation
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 3 — MACHINE LEARNING SIGNAL LAYER
+----------------------------------------------------------------
+Goal: Add ML models that generate smarter signals than rule-based
+strategies alone. ML does not replace strategies — it scores them.
+
+Why this order (XGBoost first, then LSTM):
+- XGBoost works well on small tabular datasets
+- Faster to train and easier to debug than deep learning
+- Gives you a working ML signal before adding complexity
+- LSTM adds sequential pattern recognition on top
+
+Model 1: XGBoost Signal Classifier
+What it does:
+- Takes technical indicator features as input
+- Predicts probability that price goes up in next N days
+- Outputs a score from 0 to 1 (converted to -1 to +1)
+
+Features (inputs to the model):
+- RSI value
+- MACD histogram value
+- Bollinger Band position (0 = lower band, 1 = upper band)
+- Volume ratio vs 20-day average
+- 1-day, 5-day, 20-day rolling returns
+- 20-day rolling volatility
+- IMPORTANT: All features must use only past data, never future
+  This is called lookahead bias — the most common mistake in
+  student quant projects. It makes backtests look great but
+  the model is useless in production.
+
+Training process:
+- Label data: 1 if price goes up next 5 days, 0 if it goes down
+- Split: 70% train, 15% validation, 15% test
+- Evaluate with accuracy, precision, recall, and Sharpe ratio
+  of trades generated by the signal
+
+Model 2: LSTM Price Sequence Predictor
+What it does:
+- Takes a sequence of N past days of price data
+- Predicts the expected return over the next N days
+- Better than XGBoost at capturing sequential patterns
+
+Why LSTM fits this project:
+- Price data is a time sequence — LSTM is built for sequences
+- Similar to CNN architecture you already know in PyTorch
+- Training loop is identical to what you built for the CNN
+- Roughly 20% harder than CNN to implement
+
+Architecture:
+- Input: sequence of 60 days of OHLCV + indicator features
+- LSTM layers: 2 stacked LSTM layers, hidden size 128
+- Output layer: single value (predicted N-day return)
+- Loss function: MSE for regression
+- Framework: PyTorch (same as your CNN project)
+
+Model 3: Regime Classifier
+What it does:
+- Classifies what type of market the ticker is currently in
+- Switches which strategy is active based on regime
+
+Regimes:
+- Trending market → activate Momentum strategy
+- Sideways/ranging market → activate Mean Reversion strategy
+- High volatility → reduce position size
+- Low volatility → normal position sizing
+
+How to build it:
+- Features: rolling volatility, autocorrelation of returns,
+  trend strength (ADX indicator)
+- Simple classifier: logistic regression or random forest
+- Label training data manually based on known market periods
+
+Signal combination at end of Phase 3:
+- XGBoost score + LSTM prediction + regime adjustment
+- Combined into single Price Signal Score: -1.0 to +1.0
+- This score goes to Signal Combiner (Phase 4)
+
+New FastAPI endpoints:
+- GET /ml-signal?ticker=AAPL — returns XGBoost + LSTM combined score
+- GET /regime?ticker=AAPL — returns current market regime
+- POST /train?ticker=AAPL — retrain models on latest data
+
+Libraries:
+- scikit-learn — XGBoost, regime classifier, evaluation metrics
+- xgboost — gradient boosting classifier
+- torch — LSTM model (PyTorch, same as CNN project)
+- joblib — save and load trained models
+
+Timeline: 3-4 weeks
+
+
+----------------------------------------------------------------
+PHASE 4 — NLP AND SENTIMENT LAYER
+----------------------------------------------------------------
+Goal: Build the second independent signal dimension. Sentiment
+analyzes how the market feels about a stock. Completely separate
+from price — a second opinion.
+
+Why sentiment matters:
+- Price data alone is what everyone uses
+- Alternative data like sentiment is where real alpha is
+- CEO language in earnings calls predicts moves before price moves
+- This is what firms like Citadel actually do with NLP
+
+Model: FinBERT
+- Pretrained financial sentiment model on HuggingFace
+- Trained specifically on financial text (not general text)
+- Input: any financial sentence or headline
+- Output: POSITIVE / NEGATIVE / NEUTRAL + confidence score
+- Load with: from transformers import pipeline
+- 3 lines of code to get a sentiment score from any text
+- No training required — plug and play inference only
+
+Data sources for sentiment:
+
+1. Financial News Headlines
+   - Source: NewsAPI (free tier, 100 requests/day)
+   - Fetch last 24-72 hours of headlines for the ticker
+   - Score each headline with FinBERT
+   - Aggregate into single news sentiment score
+
+2. Earnings Call Transcripts
+   - Source: scrape from Seeking Alpha or Motley Fool
+   - Most recent quarter transcript
+   - Score each sentence in the transcript
+   - Aggregate into earnings sentiment score
+   - Calculate sentiment delta vs previous quarter
+   - Delta is the most powerful signal — tone shift predicts moves
+
+3. Reddit Social Sentiment
+   - Source: Reddit PRAW API (free)
+   - Subreddits: wallstreetbets, investing, stocks
+   - Detect unusual mention volume spikes for a ticker
+   - Score post and comment sentiment with FinBERT
+
+4. Fed Statement Analysis (LLM-based)
+   - Source: Federal Reserve website (public)
+   - Use an LLM to classify language as hawkish or dovish
+   - Hawkish = rate hikes likely = negative for growth stocks
+   - Dovish = rate cuts likely = positive for growth stocks
+
+Sentiment Delta (most important signal):
+- Compare current earnings tone vs last quarter tone
+- If tone shifts from +0.4 to -0.2, delta = -0.6
+- Strong negative delta = short signal even if price looks fine
+- This is exactly what institutional NLP teams at hedge funds do
+
+Output: single Sentiment Signal Score from -1.0 to +1.0
+
+New FastAPI endpoints:
+- GET /sentiment?ticker=AAPL — returns combined sentiment score
+- GET /news-sentiment?ticker=AAPL — news headlines breakdown
+- GET /earnings-sentiment?ticker=AAPL — transcript analysis
+- GET /sentiment-delta?ticker=AAPL — QoQ sentiment shift
+
+Libraries:
+- transformers — HuggingFace FinBERT model
+- torch — model inference backend
+- newsapi-python — news headline fetching
+- praw — Reddit API
+- requests + beautifulsoup4 — earnings transcript scraping
+
+Timeline: 3-4 weeks
+
+
+----------------------------------------------------------------
+PHASE 5 — SIGNAL COMBINER
+----------------------------------------------------------------
+Goal: Merge the price signal and sentiment signal into one final
+trading decision. This is the core intelligence of the platform.
+
+How it works:
+- Price Signal Score:     -1.0 to +1.0  (weight: 60%)
+- Sentiment Signal Score: -1.0 to +1.0  (weight: 40%)
+- Combined Score = (price x 0.6) + (sentiment x 0.4)
+
+Decision thresholds:
+- Score above +0.3  → BUY signal
+- Score below -0.3  → SELL signal
+- Score between -0.3 and +0.3 → HOLD (conflicting, stay out)
+
+The HOLD signal is as valuable as BUY or SELL.
+When price and sentiment conflict, staying out avoids bad trades.
+This is the key insight that separates this from simple strategies.
+
+Position sizing via Kelly Criterion:
+- Kelly formula: f = (bp - q) / b
+  where b = odds, p = win probability, q = loss probability
+- Uses ML model confidence as win probability input
+- Higher confidence signal = larger position size
+- Prevents betting too much on uncertain signals
+
+Weights are tunable:
+- Default 60/40 but can be adjusted per ticker or market regime
+- In high-volatility regimes, sentiment weight increases
+- In trending markets, price signal weight increases
+
+New FastAPI endpoint:
+- GET /combined-signal?ticker=AAPL — returns final decision,
+  position size, and breakdown of contributing scores
+
+Timeline: 1 week (depends on Phases 3 and 4 being complete)
+
+
+----------------------------------------------------------------
+PHASE 6 — RISK MANAGEMENT MODULE
+----------------------------------------------------------------
+Goal: Protect the portfolio. No strategy works 100% of the time.
+Risk management is what keeps losses from being catastrophic.
+
+Components:
+
+1. Position Sizing (Kelly Criterion — already in Phase 5)
+
+2. Max Drawdown Limit
+   - Set a maximum portfolio loss threshold (e.g. 15%)
+   - If portfolio drops more than this, stop all trading
+   - Prevents a bad strategy from blowing up the whole portfolio
+
+3. Value at Risk (VaR)
+   - Statistical measure of worst expected loss
+   - "With 95% confidence, we will not lose more than X% in 1 day"
+   - Calculated from historical return distribution
+   - Standard measure used by every institutional risk desk
+
+4. Portfolio Exposure Limits
+   - Max % of portfolio in a single stock (e.g. 20%)
+   - Max % in a single sector (e.g. 40%)
+   - Prevents concentration risk
+
+5. Slippage Modeling
+   - Real trades do not fill at exact signal prices
+   - Model realistic fill prices based on bid/ask spread
+   - Currently missing from the Java engine — needs to be added
+
+6. Transaction Cost Modeling
+   - Commissions reduce realized returns
+   - Model realistic costs per trade
+   - Strategies that look profitable before costs may not be after
+
+Timeline: 2 weeks
+
+
+----------------------------------------------------------------
+PHASE 7 — PORTFOLIO OPTIMIZER
+----------------------------------------------------------------
+Goal: When running multiple strategies or stocks simultaneously,
+find the optimal allocation that maximizes risk-adjusted return.
+
+Components:
+
+1. Markowitz Mean-Variance Optimization
+   - Classic portfolio theory from 1952, still used everywhere
+   - Input: expected returns + covariance matrix of assets
+   - Output: optimal weight for each position
+   - Minimizes portfolio variance for a given return target
+   - Uses numpy linear algebra (matrix operations)
+
+2. Sharpe Ratio Maximization
+   - Sharpe = (return - risk free rate) / standard deviation
+   - Optimize weights to maximize this ratio
+   - Always optimize for risk-adjusted return, not raw return
+   - This is how quant funds evaluate strategies
+
+3. Efficient Frontier
+   - Plot all possible portfolios in return/risk space
+   - Efficient frontier = portfolios with best return per unit risk
+   - Visualize in frontend as scatter plot
+
+4. Monte Carlo Simulation
+   - Run the backtest 10,000 times with randomized parameters
+   - See distribution of outcomes, not just one result
+   - Answers: what is the range of realistic outcomes?
+   - Prevents over-relying on one lucky backtest result
+
+5. Multi-Strategy Comparison
+   - Run momentum, mean reversion, and factor strategies together
+   - Compare Sharpe, drawdown, win rate, cumulative return
+   - Show side-by-side in frontend dashboard
+
+6. Correlation Matrix
+   - Show how holdings move together
+   - Low correlation between positions = better diversification
+   - Visualize as heatmap in frontend
+
+Libraries:
+- scipy.optimize — portfolio optimization
+- numpy — matrix operations for covariance
+- pandas — return calculations
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 8 — FRONTEND UPGRADE
+----------------------------------------------------------------
+Goal: Make the platform look and function like a professional
+quant research tool that anyone can use publicly.
+
+Design direction:
+- Dark terminal aesthetic — Bloomberg terminal meets modern SaaS
+- Fonts: Bebas Neue (headers) + Space Mono (data) + DM Sans (body)
+- Colors: near-black background, green (#00FF88) accent for positive,
+  red for negative signals
+- NO generic purple gradients, NO Inter font, NO cookie-cutter UI
+
+Charts:
+- Replace current charts with TradingView Lightweight Charts
+- Free, professional grade, used by real trading platforms
+- Candlestick chart with strategy entry/exit markers overlaid
+- Live P&L curve updating as backtest runs
+- Monte Carlo fan chart showing outcome distribution
+- Efficient frontier scatter plot
+- Correlation heatmap for portfolio
+
+Pages to build:
+1. Homepage — platform overview, live ticker tape, feature showcase
+2. Dashboard — main app: ticker input, strategy selector, results
+3. Signal View — price signal vs sentiment signal breakdown
+   with actual news headlines that drove the score
+4. Strategy Comparison — side-by-side metrics for multiple strategies
+5. Portfolio Optimizer — weight allocation, efficient frontier chart
+6. Paper Trading Monitor — live Alpaca paper trading positions
+
+Key UI components:
+- Signal bar visualization: price score + sentiment score → combined
+- Sentiment headline feed: shows which article drove the score
+- Real-time ticker tape across the top
+- Terminal-style backtest output log
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 9 — DEPLOYMENT
+----------------------------------------------------------------
+Goal: Everything live on a public URL. Anyone can use it.
+Total cost: $0 using free tiers.
+
+Services:
+- Frontend (React)      → Vercel (free, auto-deploys from GitHub)
+- Java backend          → Railway (free tier, Spring Boot)
+- Python FastAPI        → Railway (free tier, separate service)
+- Database              → Supabase PostgreSQL (free, 500MB)
+- Cache                 → Upstash Redis (free, 10k commands/day)
+- ML models             → stored in Railway + HuggingFace Hub
+
+Environment variables needed:
+- ALPACA_API_KEY + ALPACA_SECRET_KEY
+- NEWS_API_KEY
+- SUPABASE_URL + SUPABASE_ANON_KEY
+- UPSTASH_REDIS_URL + UPSTASH_REDIS_TOKEN
+- OPENAI_API_KEY (optional, for LLM macro signal)
+
+Important label on the platform:
+- Always display "Research & Simulation Tool — Not Financial Advice"
+- This is a backtesting platform, not a live trading system
+- Be explicit that past backtest results do not predict future returns
+
+Timeline: 1-2 weeks
+
+
+----------------------------------------------------------------
+PHASE 10 — AGENTIC AI LAYER
+----------------------------------------------------------------
+Goal: An autonomous agent that orchestrates all the components
+built in Phases 1-9 to conduct quant research automatically.
+This is the most advanced feature — only build after everything
+else is complete and working.
+
+What the agent does:
+- User asks a natural language question
+- Agent breaks it into subtasks
+- Agent calls the right tools in the right order
+- Agent interprets results and decides next steps
+- Agent reports findings in plain English
+
+Example interaction:
+  User: "Find the best strategy for NVDA right now"
+
+  Agent:
+  Step 1 → Fetch NVDA data via yfinance (data tool)
+  Step 2 → Detect market regime (regime classifier tool)
+  Step 3 → Run all available strategies (backtester tool)
+  Step 4 → Pull FinBERT sentiment on last 48hr news (sentiment tool)
+  Step 5 → Combine signals (signal combiner tool)
+  Step 6 → Run walk-forward validation (validation tool)
+  Step 7 → Compare Sharpe ratios across strategies (portfolio tool)
+  Step 8 → Report: "Momentum strategy shows Sharpe 1.8,
+            sentiment is positive +0.6, recommend LONG
+            with 8% position size based on Kelly Criterion"
+
+Why this is impressive:
+- Agent is orchestrating real quant research tools, not just chatting
+- Every tool it calls was built by you and does real work
+- The combination of autonomous reasoning + real financial models
+  is genuinely novel for a student project
+- Directly mirrors what quant research teams at hedge funds do
+
+Architecture:
+- Use Claude API or OpenAI API as the reasoning engine
+- Define each module (data fetch, signal, sentiment, backtest,
+  portfolio) as a tool the agent can call
+- Agent decides which tools to call and in what order
+- Tool results fed back to agent for interpretation
+- Agent generates final research report
+
+Tools the agent will have:
+- fetch_data(ticker, period) → OHLCV dataframe
+- run_strategy(ticker, strategy_name) → backtest results
+- get_price_signal(ticker) → ML signal score
+- get_sentiment(ticker) → FinBERT sentiment score
+- get_combined_signal(ticker) → final combined decision
+- optimize_portfolio(tickers) → optimal weights
+- run_monte_carlo(ticker, strategy) → outcome distribution
+- get_regime(ticker) → current market regime
+
+Option 2 — Strategy Generator Agent (also valuable):
+- User describes strategy in plain English
+- "Buy when RSI is oversold and news sentiment turns positive"
+- Agent translates description into strategy parameters
+- Automatically runs backtest and reports results
+- No coding required from the user
+
+Option 3 — Autonomous Research Loop (most advanced):
+- Agent picks tickers to analyze
+- Runs strategies, evaluates results
+- Decides what to test next based on findings
+- Iterates until it finds a statistically significant edge
+- Reports full research findings with evidence
+
+Libraries:
+- anthropic or openai — LLM reasoning engine
+- langchain or custom tool loop — agent orchestration
+- All existing FastAPI endpoints become agent tools
+
+Timeline: 4-6 weeks (after all previous phases complete)
+
+
+----------------------------------------------------------------
+COMPLETE TECHNOLOGY STACK
+----------------------------------------------------------------
+
+Languages:
+- Java          — execution engine, order simulation, performance
+- Python        — ML models, NLP, strategies, data, agent
+- JavaScript    — React frontend, UI, charts, interactions
+
+Backend Services:
+- Java Spring Boot        — port 8080, execution engine
+- Python FastAPI          — port 8000, ML + NLP + data
+
+Databases:
+- MongoDB                 — user accounts, strategy configs (existing)
+- PostgreSQL (Supabase)   — historical data, backtest results (new)
+- Redis (Upstash)         — real-time caching (new)
+
+Data Sources:
+- yfinance                — free OHLCV, any ticker, any period
+- Alpaca API              — real-time feed + paper trading
+- NewsAPI                 — financial headlines
+- Reddit PRAW             — social sentiment
+- Seeking Alpha / Motley Fool — earnings transcripts (scraped)
+- Federal Reserve website — macro statements (public)
+
+ML / DL Models:
+- XGBoost                 — signal classification (tabular data)
+- LSTM (PyTorch)          — sequential price prediction
+- Regime Classifier       — market state detection
+- FinBERT (HuggingFace)   — financial sentiment scoring
+- LLM (Claude or GPT-4)   — macro signal + agent reasoning
+- RL Agent (future)       — Stable Baselines3, PPO or DQN
+
+Python Libraries:
+- fastapi, uvicorn        — web framework
+- pandas, numpy           — data manipulation
+- yfinance                — market data
+- ta                      — technical indicators
+- scikit-learn            — ML utilities and evaluation
+- xgboost                 — gradient boosting
+- torch                   — PyTorch deep learning
+- transformers            — HuggingFace FinBERT
+- scipy                   — portfolio optimization
+- newsapi-python          — news data
+- praw                    — Reddit API
+- requests, beautifulsoup4 — web scraping transcripts
+- anthropic or openai     — LLM agent
+
+Frontend:
+- React                   — main framework
+- TradingView Lightweight Charts — candlestick and P&L charts
+- Tailwind CSS            — utility styling
+- Recharts                — additional charts (Monte Carlo, heatmap)
+
+Deployment:
+- Vercel                  — frontend
+- Railway                 — Java + Python services
+- Supabase                — PostgreSQL database
+- Upstash                 — Redis cache
+- HuggingFace Hub         — ML model storage
+
+
+----------------------------------------------------------------
+PHASE SUMMARY AND TIMELINE
+----------------------------------------------------------------
+
+Phase 0  — Understand existing code           1-2 weeks  (NOW)
+Phase 1  — New strategies + yfinance          2-3 weeks
+Phase 2  — Python FastAPI service             2-3 weeks
+Phase 3  — ML signal layer (XGBoost + LSTM)   3-4 weeks
+Phase 4  — NLP sentiment layer (FinBERT)      3-4 weeks
+Phase 5  — Signal combiner                    1 week
+Phase 6  — Risk management module             2 weeks
+Phase 7  — Portfolio optimizer                2-3 weeks
+Phase 8  — Frontend upgrade                   2-3 weeks
+Phase 9  — Deployment                         1-2 weeks
+Phase 10 — Agentic AI layer                   4-6 weeks
+
+Total: approximately 5-6 months of consistent work
+Target completion: August 2026 (Phases 1-9 minimum)
+Phase 10 can continue after applications go out
+
+
+----------------------------------------------------------------
+CRITICAL RULES — READ BEFORE EVERY SESSION
+----------------------------------------------------------------
+
+1. NO LOOKAHEAD BIAS
+   Every feature and indicator must use only past data.
+   Never let the model see future prices during training.
+   This is the most common mistake in student quant projects.
+   It makes backtests look great but the model fails in production.
+
+2. WALK-FORWARD VALIDATION IS MANDATORY
+   Never evaluate a strategy on the same data it was trained on.
+   Always test on a period the model has never seen.
+
+3. OWN EVERY LINE OF CODE
+   If you cannot explain it out loud, do not put it on your resume.
+   Understand before you extend. Read before you write.
+
+4. HONEST RESUME CLAIMS ONLY
+   Only claim what is actually built and working.
+   Per-trade P&L is not in JSON output — do not claim it is.
+   Deployment means actually deployed — not running locally.
+
+5. BUILD IN ORDER
+   Do not skip phases. Each one is a foundation for the next.
+   Adding agentic AI before the tools exist is just a chatbot.
+   Adding ML before the data pipeline is built wastes time.
+
+6. PYTHON IS THE PRIORITY LANGUAGE
+   All ML and NLP work happens in Python.
+   The FastAPI service is the most important thing to push to
+   GitHub right now — even a skeleton counts.
+
+7. THIS IS A RESEARCH TOOL, NOT A TRADING SYSTEM
+   Always label it clearly on the platform.
+   Never claim backtest results predict future returns.
+   Paper trading via Alpaca is simulation, not real money.
+
+
+----------------------------------------------------------------
+END OF DOCUMENT
+----------------------------------------------------------------
+QuantEdge Algorithmic Trading Research Platform
+Owner: Kevin (GitHub: kevin-sodhi)
+Last updated: March 2026
+================================================================
