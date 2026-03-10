@@ -46,7 +46,7 @@ Node + Express front end for the Java moving-average backtester. Users upload a 
 4) Results: `views/backtest-results.pug` shows metrics table, signals list, raw JSON, and Chart.js plot (price with BUY/SELL markers).  
 5) Downloads: `/files/:name` serves sanitized filenames from `../data/` for grading/inspection.
 
-## Notes for grading
+## Notes
 - The Mongo connection drops and recreates the `users` collection on every server start to demonstrate server-side schema validation.
 - Default navigation hides headers on login/signup (`hideNav` flag in views). Main content after auth is the static HTML form at `/old-home`.
 - If the Java JAR is missing, `services/javaIntegration.js` logs a warning and backtests will fail when called; ensure the path in that file matches where the grader places the JAR.
