@@ -3,38 +3,42 @@ package com.kevin.algo.core;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.kevin.algo.models.BarOut;
+import com.kevin.algo.models.EquityPoint;
+import com.kevin.algo.models.Signal;
+
 /**
- * Result
- * ------
- * Final container for backtest outputs.
- * JSON-serializable with Gson.
+ * DESIGN PATTERN: Data Transfer Object / DTO (Architectural)
+ * -----------------------------------------------------------
+ * Result is a plain data holder with no behaviour. Its sole purpose is to
+ * carry all backtest output fields in one object so Gson can serialise them
+ * to JSON in a single call.
+ *
+ * Why DTO?
+ *   Main.java fills in the fields; Gson reads them. Nothing else touches Result.
+ *   Keeping it a dumb data bag separates "what data" from "how it's computed"
+ *   (MetricsCalculator) and "how it's printed" (Main → Gson).
+ *
+ * Inner classes:
+ *   Params  → echo of CLI flags for debugging / audit trail in the JSON
+ *   Metrics → computed performance numbers (filled by MetricsCalculator)
  */
 public class Result {
 
-    /** Params about this run */
     public static class Params {
-        public String csv, strategy;
+        public String csv, strategy, indicator;
         public int fast, slow;
         public double cash, fee, slip;
     }
 
-    /** Core metrics */
     public static class Metrics {
+        public int barsRead;
         public int trades;
         public double netPnl;
-        public double sharpe;
-        public double maxDrawdown;
-        public int barsRead;
-        public double winRatePct;
         public double totalReturnPct;
-    }
-
-    /** One equity point (time label + equity value) */
-    public static class EquityPoint {
-        public String t;
-        public double eq;
-        public EquityPoint() {}
-        public EquityPoint(String t, double eq) { this.t = t; this.eq = eq; }
+        public double winRatePct;
+        public double maxDrawdown;
+        public double sharpe;
     }
 
     // ---- Main result body ----
@@ -43,8 +47,7 @@ public class Result {
     public Params params = new Params();
     public Metrics metrics = new Metrics();
 
-    // These lists connect directly to the front-end
-    public List<com.kevin.algo.models.BarOut> series = new ArrayList<>();
-    public List<com.kevin.algo.models.Signal> signals = new ArrayList<>();
-    public List<com.kevin.algo.models.EquityPoint> equity = new ArrayList<>();
+    public List<BarOut> series = new ArrayList<>();
+    public List<Signal> signals = new ArrayList<>();
+    public List<EquityPoint> equity = new ArrayList<>();
 }
