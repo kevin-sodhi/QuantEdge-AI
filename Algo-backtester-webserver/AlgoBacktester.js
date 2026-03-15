@@ -26,6 +26,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const session = require('express-session');
+const cors = require('cors');
 
 const app = express();
 const PORT = 3000; 
@@ -39,6 +40,7 @@ const { FILES_DIR } = require('./services/javaIntegration');    // goes to servi
 
 // Routers
 const createBacktestRouter = require('./routes/backtest');
+const apiRouter            = require('./routes/api');
 const homeRouter = require('./routes/home');
 const backtestLegacyRouter = require('./routes/backtestLegacy');
 const createFilesRouter = require('./routes/files');
@@ -70,6 +72,9 @@ app.set('view engine', 'pug');
 // ------------------------------------------------------------
 // 4) Global middleware
 // ------------------------------------------------------------
+
+// Allow React dev server (Vite on port 5173) to call JSON API endpoints
+app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
 
 // Serve static files (CSS, JS, images, plain HTML) from /public
 app.use('/public', express.static(path.join(__dirname, 'public')));
@@ -113,6 +118,9 @@ app.get('/', (req, res) => {
   res.redirect('/login');
 });
 
+
+// JSON API for React frontend
+app.use(apiRouter);
 
 // Backtest routes (calls the Java engine, renders backtest-results.pug)
 const backtestRouter = createBacktestRouter({

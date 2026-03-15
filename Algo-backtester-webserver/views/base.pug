@@ -14,10 +14,10 @@ html(lang="en")
 
       nav.nav
         a(href="/old-home") Home
-        a.primary(href="/files/sample.csv") Download Sample CSV
+        a.primary(href="/backtest/run") Run Backtest
+        a(href="/files/sample.csv") Download Sample CSV
         a(href="/dataset/TSLA") Dataset (Route Parameter)
-        a(href="/backtest?fast=5&slow=20") Backtest (Query Params)
-        a(href="/backtest/run?fast=5&slow=20") Backtest (Templated)
+        a(href="/backtest?fast=5&slow=20") Backtest (Legacy)
 
     section
       block content

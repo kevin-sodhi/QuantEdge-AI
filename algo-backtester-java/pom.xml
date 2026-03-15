@@ -4,67 +4,77 @@
                              http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
+  <!-- Spring Boot parent manages all dependency versions -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.5</version>
+    <relativePath/>
+  </parent>
+
   <groupId>com.kevin.algo</groupId>
   <artifactId>algo-backtester-java</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
-  <name>Algorithmic Backtester (Java)</name>
+  <name>QuantEdge Java Engine</name>
 
   <properties>
-    <maven.compiler.source>17</maven.compiler.source>
-    <maven.compiler.target>17</maven.compiler.target>
+    <java.version>17</java.version>
   </properties>
 
   <dependencies>
-    <!-- Gson for JSON output -->
+
+    <!-- Spring Boot web: embedded Tomcat + Spring MVC + Jackson -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Serialises LocalDate as "2024-01-15" (not array [2024,1,15]) -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+
+    <!-- Gson: still used by legacy CLI Main.java (version managed by Spring Boot parent) -->
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
-      <version>2.11.0</version>
     </dependency>
 
-    <!-- keep JUnit but move to modern 5.x if you plan to test later -->
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>5.11.3</version>
-      <scope>test</scope>
-    </dependency>
-
+    <!-- CSV parsing for CsvDataFeed (legacy CLI) -->
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-csv</artifactId>
       <version>1.11.0</version>
-  </dependency>
+    </dependency>
+
+    <!-- Tests — Spring Boot parent manages JUnit 5 version -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
 
   </dependencies>
 
-
   <build>
     <plugins>
-      <!-- bundle everything into one runnable jar -->
+      <!-- Explicitly target Java 17 — overrides any IDE or wrapper default -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-assembly-plugin</artifactId>
-        <version>3.7.1</version>
+        <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <archive>
-            <manifest>
-              <mainClass>com.kevin.algo.cli.Main</mainClass>
-            </manifest>
-          </archive>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
+          <release>17</release>
         </configuration>
-        <executions>
-          <execution>
-            <id>make-assembly</id>
-            <phase>package</phase>
-            <goals><goal>single</goal></goals>
-          </execution>
-        </executions>
+      </plugin>
+
+      <!-- Creates the executable fat JAR: java -jar target/algo-backtester-java-1.0.0.jar -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
     </plugins>
   </build>
+
 </project>

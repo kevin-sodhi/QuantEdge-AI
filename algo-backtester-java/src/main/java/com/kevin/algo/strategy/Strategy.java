@@ -1,8 +1,10 @@
 package com.kevin.algo.strategy;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 
+import com.kevin.algo.core.Candle;
 import com.kevin.algo.models.Signal;
 
 /**
@@ -16,19 +18,21 @@ import com.kevin.algo.models.Signal;
  * How it fits here:
  *   Context       → BacktestEngine (calls maybeSignal each bar)
  *   Strategy      → this interface
- *   ConcreteStrat → MovingAverageCrossover (and any future strategies)
+ *   ConcreteStrat → MovingAverageCrossover, MomentumStrategy, MeanReversionStrategy
+ *
+ * The signature uses Map<String, Double> so any number of named indicators can
+ * be passed without changing this interface. Each strategy reads only the keys
+ * it cares about (e.g. "fast", "slow", "rsi", "bb_lower").
  *
  * Adding a new strategy = write a new class that implements this interface,
  * then register it in StrategyFactory. Zero changes to the engine.
  */
 public interface Strategy {
     Optional<Signal> maybeSignal(
-        LocalDate date, 
-        double close,
-        Double fastPrev, 
-        Double slowPrev, 
-        Double fastNow, 
-        Double slowNow,
+        LocalDate date,
+        Candle bar,
+        Map<String, Double> prevVals,
+        Map<String, Double> currVals,
         boolean inPosition
     );
 }

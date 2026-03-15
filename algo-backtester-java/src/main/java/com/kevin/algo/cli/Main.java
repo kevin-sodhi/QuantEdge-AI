@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.google.gson.Gson;
@@ -18,8 +19,14 @@ import com.kevin.algo.engine.BacktestConfig;
 import com.kevin.algo.engine.BacktestEngine;
 import com.kevin.algo.engine.MetricsCalculator;
 import com.kevin.algo.engine.ResultCollector;
+import com.kevin.algo.engine.WalkForwardValidator;
+import com.kevin.algo.indicators.BollingerBandsLower;
+import com.kevin.algo.indicators.BollingerBandsMiddle;
+import com.kevin.algo.indicators.BollingerBandsUpper;
 import com.kevin.algo.indicators.Indicator;
 import com.kevin.algo.indicators.IndicatorFactory;
+import com.kevin.algo.indicators.RSI;
+import com.kevin.algo.indicators.VolumeSMA;
 import com.kevin.algo.portfolio.Portfolio;
 import com.kevin.algo.strategy.Strategy;
 import com.kevin.algo.strategy.StrategyFactory;
@@ -76,52 +83,83 @@ public class Main {
             return;
         }
 
-        // 3) Build components via factories (Factory pattern)
-        DataFeed feed   = DataFeedFactory.create("csv", csvPath.toString());
-        Indicator iFast = IndicatorFactory.create(indicator, fast);
-        Indicator iSlow = IndicatorFactory.create(indicator, slow);
-        Strategy  strat = StrategyFactory.create(strategy);
-        Portfolio pf    = new Portfolio(cash, fee, slip);
+        // 3) Parse walk-forward flags
+        boolean walkforward = flags.containsKey("walkforward");
+        double trainRatio   = tryParseDouble(flags.get("train-ratio"), 0.7);
 
-        // 4) Wire config via Builder pattern
+        // 4) Build components: indicators depend on the chosen strategy
+        DataFeed feed = DataFeedFactory.create("csv", csvPath.toString());
+        Strategy strat = StrategyFactory.create(strategy);
+        Portfolio pf   = new Portfolio(cash, fee, slip);
+
+        Map<String, Indicator> indicators = new LinkedHashMap<>();
+        switch (strategy.toLowerCase()) {
+            case "momentum" -> {
+                indicators.put("ema50",      IndicatorFactory.create("ema", 50));
+                indicators.put("ema200",     IndicatorFactory.create("ema", 200));
+                indicators.put("rsi",        new RSI(14));
+                indicators.put("volume_sma", new VolumeSMA());
+            }
+            case "meanreversion" -> {
+                indicators.put("bb_upper",  new BollingerBandsUpper());
+                indicators.put("bb_middle", new BollingerBandsMiddle());
+                indicators.put("bb_lower",  new BollingerBandsLower());
+                indicators.put("rsi",       new RSI(14));
+            }
+            default -> {
+                // macrossover: use the user-supplied fast/slow periods
+                indicators.put("fast", IndicatorFactory.create(indicator, fast));
+                indicators.put("slow", IndicatorFactory.create(indicator, slow));
+            }
+        }
+
+        // 5) Wire config via Builder pattern
         BacktestConfig cfg = new BacktestConfig.Builder()
             .feed(feed)
-            .fast(iFast)
-            .slow(iSlow)
+            .indicators(indicators)
             .strategy(strat)
             .portfolio(pf)
             .build();
 
-        // 5) Register Observer (ResultCollector) and run engine
+        // 6) Register Observer (ResultCollector) and run engine
         ResultCollector collector = new ResultCollector();
         BacktestEngine engine = new BacktestEngine();
         engine.addListener(collector);
         engine.run(cfg);
 
-        // 6) Compute full metrics
+        // 7) Compute full metrics
         Result.Metrics metrics = MetricsCalculator.compute(pf.closedTrades(), collector.equity, cash);
 
-        // 7) Assemble params block
+        // 8) Assemble params block
         Result.Params params = new Result.Params();
-        params.csv      = csv;
-        params.strategy = strategy;
+        params.csv       = csv;
+        params.strategy  = strategy;
         params.indicator = indicator;
-        params.fast     = fast;
-        params.slow     = slow;
-        params.cash     = cash;
-        params.fee      = fee;
-        params.slip     = slip;
+        params.fast      = fast;
+        params.slow      = slow;
+        params.cash      = cash;
+        params.fee       = fee;
+        params.slip      = slip;
 
-        // 8) Build JSON response
+        // 9) Build JSON response
         response.put("ok",      true);
         response.put("message", "Backtest complete");
         response.put("params",  params);
         response.put("metrics", metrics);
+        response.put("trades",  pf.closedTrades());
         response.put("series",  collector.series);
         response.put("signals", collector.signals);
         response.put("equity",  collector.equity);
 
-        // 9) Print JSON
+        // 10) Optional walk-forward validation (macrossover only)
+        if (walkforward && strategy.equalsIgnoreCase("macrossover")) {
+            DataFeed wfFeed = DataFeedFactory.create("csv", csvPath.toString());
+            WalkForwardValidator wfv = new WalkForwardValidator(
+                wfFeed, trainRatio, strategy, indicator, cash);
+            response.put("walkForward", wfv.run());
+        }
+
+        // 11) Print JSON
         System.out.println(GSON.toJson(response));
     }
 
