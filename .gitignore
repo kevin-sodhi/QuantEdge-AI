@@ -15,7 +15,7 @@ Algo-backtester-webserver/key.pem
 algo-backtester-java/target/
 
 # Data (optional — remove this line if you want to track data files)
-data/
+/data/
 # Python
 __pycache__/
 *.pyc
