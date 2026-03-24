@@ -16,3 +16,6 @@ algo-backtester-java/target/
 
 # Data (optional — remove this line if you want to track data files)
 data/
+# Python
+__pycache__/
+*.pyc
