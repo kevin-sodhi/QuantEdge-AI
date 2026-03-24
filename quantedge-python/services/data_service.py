@@ -15,6 +15,7 @@ fetch_indicators(ticker, period) → dict of indicator values for the
 """
 
 import io
+import time
 import yfinance as yf
 import pandas as pd
 import ta
@@ -30,13 +31,20 @@ def fetch_ohlcv(ticker: str, period: str = "1y") -> pd.DataFrame:
 
     ticker = ticker.upper().strip()
 
-    # Use Ticker.history() — more reliable on cloud servers than yf.download()
-    t = yf.Ticker(ticker)
-    df = t.history(period=period, auto_adjust=True)
-
-    if df.empty:
-        # Fallback to yf.download() in case Ticker.history() fails
-        df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+    # Retry up to 3 times with backoff — Railway IPs get rate limited by Yahoo Finance
+    df = pd.DataFrame()
+    for attempt in range(3):
+        try:
+            t = yf.Ticker(ticker)
+            df = t.history(period=period, auto_adjust=True)
+            if not df.empty:
+                break
+            df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+            if not df.empty:
+                break
+        except Exception:
+            pass
+        time.sleep(2 ** attempt)  # 1s, 2s, 4s
 
     if df.empty:
         raise ValueError(f"No data returned for ticker '{ticker}'. Check the symbol.")
