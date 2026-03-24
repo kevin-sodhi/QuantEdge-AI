@@ -29,7 +29,14 @@ def fetch_ohlcv(ticker: str, period: str = "1y") -> pd.DataFrame:
         raise ValueError(f"Invalid period '{period}'. Must be one of: {sorted(VALID_PERIODS)}")
 
     ticker = ticker.upper().strip()
-    df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+
+    # Use Ticker.history() — more reliable on cloud servers than yf.download()
+    t = yf.Ticker(ticker)
+    df = t.history(period=period, auto_adjust=True)
+
+    if df.empty:
+        # Fallback to yf.download() in case Ticker.history() fails
+        df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
 
     if df.empty:
         raise ValueError(f"No data returned for ticker '{ticker}'. Check the symbol.")
