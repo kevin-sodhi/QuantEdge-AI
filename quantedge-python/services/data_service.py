@@ -1,7 +1,7 @@
 """
 data_service.py
 ---------------
-Fetches OHLCV data from Yahoo Finance via yfinance and computes
+Fetches OHLCV data from Twelve Data and computes
 technical indicators using the `ta` library.
 
 fetch_ohlcv(ticker, period) → pandas DataFrame with columns:
@@ -16,7 +16,6 @@ fetch_indicators(ticker, period) → dict of indicator values for the
 
 import io
 import os
-from datetime import datetime, timedelta
 import httpx
 import pandas as pd
 import ta
@@ -24,59 +23,51 @@ import ta
 
 VALID_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
 
-PERIOD_DAYS = {
-    "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
-    "1y": 365, "2y": 730, "5y": 1825, "10y": 3650,
+# Map period strings to number of trading bars to request from Twelve Data
+PERIOD_BARS = {
+    "1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 130,
+    "1y": 252, "2y": 504, "5y": 1260, "10y": 2520,
+    "ytd": 252, "max": 5000,
 }
 
 
 def fetch_ohlcv(ticker: str, period: str = "1y") -> pd.DataFrame:
-    """Return OHLCV DataFrame indexed by date string using Alpha Vantage."""
+    """Return OHLCV DataFrame indexed by date string using Twelve Data."""
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of: {sorted(VALID_PERIODS)}")
 
     ticker = ticker.upper().strip()
-    api_key = os.environ.get("ALPHA_VANTAGE_KEY", "")
+    api_key = os.environ.get("TWELVE_DATA_KEY", "")
     if not api_key:
-        raise ValueError("ALPHA_VANTAGE_KEY environment variable not set.")
+        raise ValueError("TWELVE_DATA_KEY environment variable not set.")
 
-    # full outputsize gives 20+ years; compact gives only 100 bars
-    outputsize = "compact" if period in ("1d", "5d", "1mo", "3mo") else "full"
+    outputsize = PERIOD_BARS.get(period, 252)
 
     url = (
-        f"https://www.alphavantage.co/query"
-        f"?function=TIME_SERIES_DAILY&symbol={ticker}"
-        f"&outputsize={outputsize}&apikey={api_key}"
+        f"https://api.twelvedata.com/time_series"
+        f"?symbol={ticker}&interval=1day&outputsize={outputsize}&apikey={api_key}"
     )
 
     resp = httpx.get(url, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
 
-    if "Time Series (Daily)" not in payload:
-        note = payload.get("Note") or payload.get("Information") or payload.get("Error Message", "Unknown error")
-        raise ValueError(f"Alpha Vantage error for '{ticker}': {note}")
+    if payload.get("status") == "error":
+        raise ValueError(f"Twelve Data error for '{ticker}': {payload.get('message', 'Unknown error')}")
 
-    raw = payload["Time Series (Daily)"]
-    df = pd.DataFrame.from_dict(raw, orient="index")
+    values = payload.get("values")
+    if not values:
+        raise ValueError(f"No data returned for ticker '{ticker}'. Check the symbol.")
+
+    df = pd.DataFrame(values)
+    df = df.rename(columns={"datetime": "Date"})
+    df = df.set_index("Date")
     df.index = pd.to_datetime(df.index)
+    df = df[["open", "high", "low", "close", "volume"]].rename(columns={
+        "open": "Open", "high": "High", "low": "Low",
+        "close": "Close", "volume": "Volume"
+    }).astype(float)
     df = df.sort_index()
-    df = df.rename(columns={
-        "1. open": "Open", "2. high": "High",
-        "3. low": "Low",  "4. close": "Close", "5. volume": "Volume"
-    })
-    df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
-
-    # Filter to requested period
-    if period == "ytd":
-        start = datetime(datetime.now().year, 1, 1)
-        df = df[df.index >= start]
-    elif period == "max":
-        pass
-    else:
-        days = PERIOD_DAYS[period]
-        start = datetime.now() - timedelta(days=days)
-        df = df[df.index >= start]
 
     if df.empty:
         raise ValueError(f"No data returned for ticker '{ticker}'. Check the symbol.")
