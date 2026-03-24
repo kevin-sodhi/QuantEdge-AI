@@ -7,14 +7,21 @@ block content
 
     .backtest-meta
       p
-        span.label CSV:
-        span.value #{params.csv}
-      p
-        span.label Fast MA:
-        span.value #{params.fast}
+        span.label Ticker:
+        span.value #{params.ticker || 'N/A'}
         span.separator |
-        span.label Slow MA:
-        span.value #{params.slow}
+        span.label Period:
+        span.value #{params.period || 'N/A'}
+        span.separator |
+        span.label Strategy:
+        span.value #{params.strategy || 'macrossover'}
+      if params.strategy === 'macrossover' || !params.strategy
+        p
+          span.label Fast MA:
+          span.value #{params.fast}
+          span.separator |
+          span.label Slow MA:
+          span.value #{params.slow}
 
     .card.signals-card
         h3 Signals
@@ -37,6 +44,8 @@ block content
             +metricsRow("SMA Slow (last)", metrics.lastSlow)
             +metricsRow("Trades", metrics.trades)
             +metricsRow("Total Return %", metrics.totalReturnPct)
+            +metricsRow("Sharpe Ratio", metrics.sharpe)
+            +metricsRow("Max Drawdown %", metrics.maxDrawdown)
 
     p.back-link
       a(href="/") ← Home

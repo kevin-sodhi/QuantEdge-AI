@@ -1,0 +1,55 @@
+extends base
+
+block content
+  .backtest-container
+    h1 Run Backtest
+
+    form(action="/backtest/run" method="POST")
+      .card
+        h3 Market Data
+
+        .form-row
+          label Ticker Symbol
+            input(
+              type="text"
+              name="ticker"
+              placeholder="AAPL"
+              maxlength="10"
+              style="text-transform:uppercase"
+              required
+            )
+
+          label Period
+            select(name="period")
+              option(value="6mo") 6 Months
+              option(value="1y" selected) 1 Year
+              option(value="2y") 2 Years
+              option(value="5y") 5 Years
+
+      .card
+        h3 Strategy
+
+        .form-row
+          label Strategy
+            select(name="strategy" id="strategySelect")
+              option(value="macrossover") MA Crossover
+              option(value="momentum") Momentum
+              option(value="meanreversion") Mean Reversion
+
+        // MA params — only needed for macrossover
+        #maParams
+          .form-row
+            label Fast MA
+              input(type="number" name="fast" min="1" value="5" required)
+            label Slow MA
+              input(type="number" name="slow" min="2" value="20" required)
+
+      .card
+        button.btn-primary(type="submit") Run Backtest
+
+  script.
+    const sel = document.getElementById('strategySelect');
+    const maDiv = document.getElementById('maParams');
+    sel.addEventListener('change', () => {
+      maDiv.style.display = sel.value === 'macrossover' ? '' : 'none';
+    });

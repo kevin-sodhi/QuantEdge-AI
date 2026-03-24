@@ -1,7 +1,9 @@
 package com.kevin.algo.engine;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.kevin.algo.core.Candle;
 import com.kevin.algo.data.DataFeed;
@@ -14,27 +16,17 @@ import com.kevin.algo.strategy.Strategy;
 /**
  * DESIGN PATTERN: Facade (Structural)
  * -------------------------------------
- * Provides one simple entry point — run(BacktestConfig) — that internally
- * coordinates data feeding, indicator updates, signal generation, portfolio
- * management, and event notification. Callers don't need to know the order
- * or details of these steps; they just call run().
+ * Provides one simple entry point — run(BacktestConfig) — that coordinates
+ * data feeding, indicator updates, signal generation, portfolio management,
+ * and event notification.
  *
  * DESIGN PATTERN: Observer (Behavioural) — Subject / Observable
  * --------------------------------------------------------------
- * The engine maintains a list of BacktestListeners and fires three events
- * on every bar: onBar, onSignal (when a signal fires), onEquity.
- * Listeners are registered via addListener() — the engine doesn't know
- * or care what they do with the events.
+ * Fires onBar, onSignal, onEquity events to registered BacktestListeners.
  *
- * DESIGN PATTERN: Strategy (usage)
- * ----------------------------------
- * The engine accepts a Strategy interface, not a concrete class.
- * Swapping SMA → EMA or MACrossover → RSI strategy requires no engine changes.
- *
- * DESIGN PATTERN: Builder (usage)
- * ---------------------------------
- * The convenience overload run(BacktestConfig) unpacks the builder-constructed
- * config so that Main.java never has to call the 5-argument overload directly.
+ * The engine now iterates over a Map<String, Indicator> per bar, building
+ * prevVals and currVals maps that are passed to the strategy. This lets any
+ * strategy read any named indicator without engine changes.
  */
 public class BacktestEngine {
 
@@ -45,31 +37,36 @@ public class BacktestEngine {
         return this;
     }
 
-    /** Convenience overload that accepts a BacktestConfig (Builder pattern). */
     public void run(BacktestConfig cfg) {
-        run(cfg.feed, cfg.fast, cfg.slow, cfg.strategy, cfg.portfolio);
+        run(cfg.feed, cfg.indicators, cfg.strategy, cfg.portfolio);
     }
 
-    public void run(DataFeed feed, Indicator fast, Indicator slow, Strategy strat, Portfolio pf) {
-        Double prevFast = null, prevSlow = null;
+    public void run(DataFeed feed, Map<String, Indicator> indicators, Strategy strat, Portfolio pf) {
+        // prevVals starts empty — strategies must null-check before using
+        Map<String, Double> prevVals = new HashMap<>();
 
         while (feed.hasNext()) {
-            // One Candle = one row = one day of OHLCV data
             Candle c = feed.next();
-            fast.accumulate(c);
-            slow.accumulate(c);
 
-            Double fNow = fast.isReady() ? fast.value() : null;
-            Double sNow = slow.isReady() ? slow.value() : null;
+            // 1) Accumulate every indicator for this bar
+            for (Indicator ind : indicators.values()) {
+                ind.accumulate(c);
+            }
 
-            // Build bar output with generic indicator map
-            BarOut bar = new BarOut(c.getDate(), c.getOpen(), c.getHigh(), c.getLow(), c.getClose())
-                    .addIndicator("fast", fNow)
-                    .addIndicator("slow", sNow);
+            // 2) Build currVals: null for indicators not yet warmed up
+            Map<String, Double> currVals = new HashMap<>();
+            for (Map.Entry<String, Indicator> entry : indicators.entrySet()) {
+                currVals.put(entry.getKey(),
+                    entry.getValue().isReady() ? entry.getValue().value() : null);
+            }
+
+            // 3) Build BarOut with all current indicator values
+            BarOut bar = new BarOut(c.getDate(), c.getOpen(), c.getHigh(), c.getLow(), c.getClose());
+            currVals.forEach(bar::addIndicator);
             listeners.forEach(l -> l.onBar(bar));
 
-            // Generate signal when indicators are ready
-            strat.maybeSignal(c.getDate(), c.getClose(), prevFast, prevSlow, fNow, sNow, pf.inPosition())
+            // 4) Ask strategy for a signal
+            strat.maybeSignal(c.getDate(), c, prevVals, currVals, pf.inPosition())
                 .ifPresent(sig -> {
                     switch (sig.type) {
                         case BUY  -> pf.onBuy(sig.date, sig.price);
@@ -78,11 +75,12 @@ public class BacktestEngine {
                     listeners.forEach(l -> l.onSignal(sig));
                 });
 
+            // 5) Record equity
             EquityPoint ep = new EquityPoint(c.getDate(), pf.equityAt(c.getClose()));
             listeners.forEach(l -> l.onEquity(ep));
 
-            prevFast = fNow;
-            prevSlow = sNow;
+            // 6) Shift: currVals becomes prevVals for next bar
+            prevVals = new HashMap<>(currVals);
         }
     }
 }

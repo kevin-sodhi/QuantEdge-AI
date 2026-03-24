@@ -1,8 +1,17 @@
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
 const mongodb = require("mongodb")
 const mongoose = require('mongoose');
-const { MONGODB,SESSIONS } = require('../credentials');
-const dbName = 'algo-backtester';
-const uri = `mongodb+srv://${encodeURIComponent(MONGODB.user)}:${encodeURIComponent(MONGODB.login)}@${MONGODB.cluster}/${dbName}?retryWrites=true&w=majority`;
+
+// Production: set MONGODB_URI env var in Railway.
+// Development: falls back to credentials.js.
+let uri = process.env.MONGODB_URI;
+if (!uri) {
+  const { MONGODB } = require('../credentials');
+  const dbName = 'QuantEdgeAi';
+  uri = `mongodb+srv://${encodeURIComponent(MONGODB.user)}:${encodeURIComponent(MONGODB.login)}@${MONGODB.cluster}/${dbName}?retryWrites=true&w=majority`;
+}
 
 
 async function resetUsersCollection() {

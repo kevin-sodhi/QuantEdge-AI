@@ -1,16 +1,16 @@
 package com.kevin.algo.strategy;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 
+import com.kevin.algo.core.Candle;
 import com.kevin.algo.models.Signal;
 
 /**
  * DESIGN PATTERN: Strategy (Behavioural) — Concrete Strategy
  * -----------------------------------------------------------
- * This is one concrete implementation of the Strategy interface.
- * It encapsulates the MA-crossover signal logic so it can be swapped
- * with any other Strategy without touching the engine.
+ * MA-crossover: reads "fast" and "slow" from the named indicator maps.
  *
  * Signal rules:
  *   BUY  → fast MA crosses above slow MA (prevDiff ≤ 0, currDiff > 0)
@@ -18,20 +18,26 @@ import com.kevin.algo.models.Signal;
  */
 public class MovingAverageCrossover implements Strategy {
 
-    public Optional<Signal> maybeSignal(LocalDate date, double close,
-                                        Double fastPrev, Double slowPrev,
-                                        Double fastNow, Double slowNow,
+    @Override
+    public Optional<Signal> maybeSignal(LocalDate date, Candle bar,
+                                        Map<String, Double> prevVals,
+                                        Map<String, Double> currVals,
                                         boolean inPosition) {
+        Double fastPrev = prevVals.get("fast");
+        Double slowPrev = prevVals.get("slow");
+        Double fastNow  = currVals.get("fast");
+        Double slowNow  = currVals.get("slow");
+
         if (fastPrev == null || slowPrev == null ||
             fastNow == null  || slowNow == null) return Optional.empty();
 
         double prevDiff = fastPrev - slowPrev;
-        double currDiff = fastNow - slowNow;
+        double currDiff = fastNow  - slowNow;
 
         if (prevDiff <= 0 && currDiff > 0 && !inPosition)
-            return Optional.of(new Signal(date, close, Signal.Type.BUY));
+            return Optional.of(new Signal(date, bar.getClose(), Signal.Type.BUY));
         if (prevDiff >= 0 && currDiff < 0 && inPosition)
-            return Optional.of(new Signal(date, close, Signal.Type.SELL));
+            return Optional.of(new Signal(date, bar.getClose(), Signal.Type.SELL));
 
         return Optional.empty();
     }

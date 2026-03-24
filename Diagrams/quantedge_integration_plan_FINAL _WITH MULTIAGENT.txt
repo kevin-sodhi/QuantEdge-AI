@@ -1,0 +1,1195 @@
+================================================================
+QUANTEDGE — FULL INTEGRATION PLAN (v3 — FINAL)
+Systematic Alpha Research Platform
+================================================================
+This document covers everything being integrated into the project,
+in the exact order it should be built. Read this before starting
+any new feature. Every section depends on the one before it.
+
+PROJECT IDENTITY:
+Name:    QuantEdge — Systematic Alpha Research Platform
+Owner:   Kevin Sodhi (GitHub: kevin-sodhi)
+Stack:   Java + Python + React + PostgreSQL + Redis
+Goal:    Institutional-grade quant research platform with
+         live paper trading proof, alpha mining pipeline,
+         multi-agent autonomous trading, and NLP sentiment
+Updated: March 2026
+================================================================
+
+
+----------------------------------------------------------------
+CURRENT STATE
+----------------------------------------------------------------
+What is already built:
+- Java execution engine (JAR) — runs backtests on historical data
+- Node.js / Express web layer — connects frontend to Java engine
+- MongoDB — user accounts and strategy data persistence
+- Moving average crossover strategy — AI generated, being studied
+- CSV-based data input — being replaced with real-time feeds
+- Session-based authentication + HTTPS
+
+What is NOT done yet:
+- Owner has not fully read and understood all existing code
+- No Python layer exists
+- No real-time data feed
+- No ML models
+- No NLP or sentiment analysis
+- No event-driven trading logic
+- No paper trading
+- No multi-agent system
+- No deployment
+
+Current phase: PHASE 0 — reading and understanding all code
+Do not add anything new until Phase 0 is complete.
+
+Key corrections found while reading the existing code:
+- Portfolio value tracked daily, not after every trade
+- Cumulative return is a single final percentage, not running
+- Per-trade P&L calculated but NOT included in JSON output
+  (fix this — add trades[] and dailyPortfolioValue[] to output)
+
+
+----------------------------------------------------------------
+PHASE 0 — UNDERSTAND EXISTING CODE (YOU ARE HERE)
+----------------------------------------------------------------
+Goal: Be able to explain every line of the existing codebase
+out loud without looking at it. Non-negotiable before moving on.
+
+What to understand:
+- How the Java engine reads price data
+- How the moving average crossover strategy generates signals
+- How buy/sell decisions are made
+- How portfolio state is tracked (daily, not per-trade)
+- How cumulative return is calculated (single final value)
+- How JSON output is structured and consumed by Node layer
+- How Node/Express APIs trigger the Java JAR
+- How MongoDB stores strategy results and user data
+
+Timeline: 1-2 weeks
+
+
+----------------------------------------------------------------
+PHASE 1 — OWN THE STRATEGY LAYER
+----------------------------------------------------------------
+Goal: Implement new strategies yourself. No AI writing the logic.
+This is what proves you own the codebase.
+
+Strategies to implement (write these yourself):
+
+1. Momentum Strategy
+   - 50-day EMA crosses above 200-day EMA (golden cross)
+   - RSI between 50 and 70 (bullish, not overbought)
+   - Volume above 20-day average (confirms the move)
+   - Signal: BUY when all three conditions met
+
+2. Mean Reversion Strategy
+   - Price touches or breaks lower Bollinger Band
+   - RSI below 30 (oversold condition)
+   - Signal: BUY expecting price to revert to mean
+   - Signal: SELL when price returns to middle band
+
+3. Factor-Based Strategy
+   - Momentum factor: trending stocks continue trending
+   - Quality factor: profitable companies outperform
+   - Rank by combined factor score, long top decile
+
+Design Patterns to apply in Phase 1:
+- Strategy Pattern: all strategies implement one interface
+- Factory Pattern: StrategyFactory creates from string name
+- Builder Pattern: BacktestConfig builder for clean params
+
+Also fix in Phase 1:
+- Add per-trade P&L to JSON output from Java engine
+- Add walk-forward validation (train A, test B)
+
+Replace CSV uploads:
+- Integrate yfinance Python library
+- Requires Python FastAPI skeleton to exist first
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 2 — PYTHON FASTAPI SERVICE
+----------------------------------------------------------------
+Goal: Build the Python intelligence layer alongside Java.
+All ML, NLP, event-driven logic, and agent code lives here.
+
+Service setup:
+- FastAPI framework, runs on port 8000
+- Java backend calls it via REST for ML and signals
+- Completely independent service
+
+Upgrade Java from JAR to Spring Boot REST API:
+- Replace child process approach with proper REST service
+- Java runs on port 8080 as a Spring Boot application
+- Node.js calls Java via HTTP, no more spawning processes
+- Keep all existing Java business logic unchanged
+- Add REST controllers exposing engine as API endpoints
+
+Endpoints to build in Phase 2:
+- GET /health
+- GET /data?ticker=AAPL&period=1y
+- GET /indicators?ticker=AAPL
+- GET /price-signal?ticker=AAPL&strategy=momentum
+
+Technical indicators:
+- RSI, MACD, EMA/SMA crossover, Bollinger Bands, ATR, Volume ratio
+
+Libraries:
+- fastapi, uvicorn, yfinance, pandas, numpy, ta
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 3 — MACHINE LEARNING SIGNAL LAYER
+----------------------------------------------------------------
+Goal: ML models that score strategies. ML does not replace
+strategies — it adds intelligence on top of them.
+
+Model 1: XGBoost Signal Classifier
+- Input: RSI, MACD, BB position, volume ratio,
+  1d/5d/20d returns, 20d volatility
+- Output: probability price goes up → score -1 to +1
+- CRITICAL: all features use only past data (no lookahead)
+- Evaluate: accuracy, F1, Sharpe of generated signal
+
+Model 2: LSTM Price Sequence Predictor (PyTorch)
+- Input: 60-day sequence of OHLCV + indicators
+- Output: predicted N-day return
+- Architecture: 2 stacked LSTM layers, hidden size 128
+- Same training loop as your CNN project
+
+Model 3: Regime Classifier
+- Classifies: trending / sideways / volatile
+- Switches active strategy based on current regime
+
+Model 4: CNN Pattern Recognition
+- Input: normalized price window as 1D sequence
+- Detects: head and shoulders, double bottom, flags, triangles
+- Your CNN image classification experience applies directly here
+- Pattern signal becomes 4th input to Signal Combiner
+
+Combined Price Signal Score: -1.0 to +1.0
+
+New FastAPI endpoints:
+- GET /ml-signal?ticker=AAPL
+- GET /regime?ticker=AAPL
+- GET /patterns?ticker=AAPL
+- POST /train?ticker=AAPL
+
+Libraries:
+- scikit-learn, xgboost, torch, joblib
+
+Timeline: 3-4 weeks
+
+
+----------------------------------------------------------------
+PHASE 4 — NLP SENTIMENT AND EVENT-DRIVEN LAYER
+----------------------------------------------------------------
+Split into 4A (ticker-level sentiment) and 4B (macro events).
+Build 4A first, then extend to 4B.
+
+================================================================
+PHASE 4A — STANDARD SENTIMENT ANALYSIS
+================================================================
+Core Model: FinBERT (HuggingFace, plug and play)
+- Input: any financial text
+- Output: POSITIVE / NEGATIVE / NEUTRAL + confidence
+- No training required, inference only
+
+Data sources:
+1. NewsAPI — last 24-72hr headlines per ticker
+2. Earnings call transcripts — Seeking Alpha scraping
+3. Reddit PRAW — WSB and investing subreddits
+4. Fed statements — hawkish/dovish LLM classification
+
+Sentiment Delta (most important signal):
+- Compare current earnings tone vs last quarter
+- Strong negative delta = short signal regardless of price
+- This is what institutional NLP teams at hedge funds do
+
+Output: Sentiment Signal Score -1.0 to +1.0
+
+New FastAPI endpoints:
+- GET /sentiment?ticker=AAPL
+- GET /news-sentiment?ticker=AAPL
+- GET /earnings-sentiment?ticker=AAPL
+- GET /sentiment-delta?ticker=AAPL
+- GET /social-sentiment?ticker=AAPL
+
+================================================================
+PHASE 4B — EVENT-DRIVEN MACRO ANALYSIS
+================================================================
+Goal: Monitor real-time global news for macro events and
+automatically identify affected stocks and direction.
+
+Components:
+
+1. News keyword monitoring (poll every 15 minutes)
+   - Categories: geopolitical, commodity, macro, corporate
+   - Spike = 3x above 7-day rolling baseline
+
+2. Event classifier
+   - Types: oil shock, geopolitical, Fed shift, trade war,
+     natural disaster, corporate scandal
+
+3. Sector impact mapper
+   - Oil spike: XOM/CVX win, airlines/trucking lose
+   - Geopolitical: defense/gold win, airlines/tourism lose
+   - Fed hike: banks win, tech growth/REITs lose
+   - Trade war: domestic manufacturers win, importers lose
+
+4. Historical event study
+   - Backtest 8+ past events (2019 Saudi attack,
+     2020 Soleimani, 2022 Russia-Ukraine, 2023 Israel-Hamas)
+   - Measure stock performance at day 1, 3, 7, 30
+
+5. Beta analysis
+   - Stock beta to oil, gold, USD, 10yr Treasury yield
+   - Higher beta = more affected by event driver
+
+6. Second-order effects detector
+   - Oil up → fertilizer costs up → MOS, NTR affected
+   - Hormuz blocked → shipping rerouting → ZIM, MATX
+   - Russia sanctions → titanium supply → aerospace
+
+7. Opportunity ranker
+   - Combines sentiment + beta + historical return
+   - Outputs ranked LONG list + ranked SHORT list
+
+New FastAPI endpoints:
+- GET /macro-events
+- GET /event-analysis?event_id=123
+- GET /affected-tickers?event_type=oil_spike
+- GET /historical-event-study?event_type=oil_spike&ticker=XOM
+- GET /beta?ticker=XOM&reference=oil
+- GET /second-order-effects?event_type=oil_spike
+
+Additional data sources:
+- Alpha Vantage — commodity prices (oil, gold, wheat)
+- FRED API — macro economic data (free)
+
+Timeline Phase 4A: 2-3 weeks
+Timeline Phase 4B: 2 weeks on top of 4A
+
+
+----------------------------------------------------------------
+PHASE 5 — SIGNAL COMBINER
+----------------------------------------------------------------
+Goal: Merge all signals into one final trading decision.
+
+Signal inputs:
+- Price Signal (Phase 3):       -1.0 to +1.0 (weight: 40%)
+- Sentiment Signal (Phase 4A):  -1.0 to +1.0 (weight: 30%)
+- Event Signal (Phase 4B):      -1.0 to +1.0 (weight: 20%)
+- Pattern Signal (Phase 3 CNN): -1.0 to +1.0 (weight: 10%)
+
+Default formula:
+Combined = (price x 0.4) + (sentiment x 0.3) +
+           (event x 0.2) + (pattern x 0.1)
+
+When macro event detected, weights shift:
+- Event weight → 40%, Price → 35%, Sentiment → 20%, Pattern → 5%
+
+Thresholds:
+- Score above +0.3  → BUY
+- Score below -0.3  → SELL
+- Between           → HOLD (stay out)
+
+Position sizing via Kelly Criterion:
+- f = (bp - q) / b
+- Uses ML signal confidence as win probability
+- Apply half-Kelly in practice to reduce drawdown
+
+New FastAPI endpoint:
+- GET /combined-signal?ticker=AAPL
+
+Timeline: 1 week
+
+
+----------------------------------------------------------------
+PHASE 6 — RISK MANAGEMENT MODULE
+----------------------------------------------------------------
+Components:
+
+1. Kelly Criterion position sizing (from Phase 5)
+2. Max drawdown auto-stop (stop all at 15% portfolio drop)
+3. Value at Risk (VaR) — 95% confidence 1-day loss estimate
+4. Portfolio exposure limits (max 20% per stock, 40% sector)
+5. Slippage modeling (realistic bid/ask spread on fills)
+6. Transaction cost modeling (commissions reduce returns)
+7. Event risk override (reduce positions 30-50% on macro events)
+
+Timeline: 2 weeks
+
+
+----------------------------------------------------------------
+PHASE 7 — PORTFOLIO MANAGER + OPTIMIZER
+----------------------------------------------------------------
+Goal: The layer between signal combiner and execution engine.
+Answers: given ALL tickers, how do we allocate capital?
+
+Component 1: Signal Aggregator
+- Scans 20-50 tickers simultaneously
+- Runs full signal pipeline on each
+- Produces ranked signal table
+- Only tickers above +0.3 or below -0.3 pass through
+
+Component 2: Capital Allocator (4 methods)
+- Equal weight: split equally across BUY signals
+- Signal-weighted: stronger signal = larger allocation
+- Markowitz optimal: maximize Sharpe across portfolio
+- Kelly Criterion: size by edge probability per position
+
+Component 3: Correlation-Aware Allocation
+- Calculate pairwise correlation across all candidates
+- Above 0.85: reduce weaker signal by 60%
+- 0.70-0.85: reduce weaker signal by 30%
+- Below 0.70: no adjustment needed
+- Prevents secretly concentrated sector bets
+
+Component 4: Rebalancing Engine
+- Trigger on 5% minimum signal change
+- Require 2 consecutive days of reversal before exit
+- Weekly review of all positions
+- Event-triggered immediate rebalancing
+
+Component 5: Drawdown Guard (3 tiers)
+- Portfolio down 5% in 1 week → reduce all positions 30%
+- Portfolio down 10% from peak → reduce 60%, no new positions
+- Portfolio down 15% from peak → exit all, move to cash
+- Recovery: 3 consecutive positive signal days before re-entry
+- Restart at 50% normal size, scale up over 2 weeks
+
+Component 6: Markowitz Optimizer
+- scipy.optimize.minimize with SLSQP method
+- Constraint: max 20% per position
+- Maximize Sharpe ratio across full portfolio
+
+Component 7: Efficient Frontier
+- Plot all portfolio combinations in return/risk space
+- Show current vs optimal allocation
+
+Component 8: Monte Carlo Simulation (10,000 runs)
+- Randomized parameters, starting dates, regimes
+- Output: best case, expected, worst case outcomes
+- p-value of strategy edge from simulation
+
+Component 9: Multi-Strategy Comparison
+- All strategies run simultaneously, own sub-portfolio each
+- Compare Sharpe, drawdown, win rate, CAGR side by side
+
+Component 10: Event-Adjusted Rebalancing
+- Macro event → shift toward winners, away from losers
+- Show before/after weight comparison in UI
+
+New FastAPI endpoints:
+- GET /portfolio/scan
+- GET /portfolio/allocate?method=markowitz
+- GET /portfolio/rebalance
+- GET /portfolio/correlation-matrix
+- GET /portfolio/efficient-frontier
+- GET /portfolio/monte-carlo?runs=10000
+- GET /portfolio/drawdown-status
+- GET /portfolio/event-rebalance?event_id=123
+- GET /portfolio/audit-log
+
+Libraries:
+- scipy.optimize, numpy, pandas, matplotlib/plotly
+
+Timeline: 3-4 weeks
+
+
+----------------------------------------------------------------
+PHASE 8 — LIVE PAPER TRADING SYSTEM
+----------------------------------------------------------------
+Goal: Real proof the platform works. Live paper trading on
+Alpaca with real market prices and simulated money.
+This is the proof of concept that shows to recruiters.
+
+This is the most important differentiator of the project.
+A live track record with documented daily P&L, strategy
+comparison, and alpha vs benchmark is undeniable proof.
+
+================================================================
+PAPER TRADING SETUP
+================================================================
+Platform: Alpaca Paper Trading (free)
+Starting Capital: $100,000 (paper)
+Market Hours: 9:30 AM — 4:00 PM EST
+Data Source: Alpaca real-time price feed
+
+Two trading modes available:
+
+MODE 1 — ASSISTED TRADING (user drives, AI advises)
+MODE 2 — AUTONOMOUS TRADING (multi-agent system drives)
+
+================================================================
+MODE 1: ASSISTED TRADING
+================================================================
+User picks stock and strategy, AI agent gives full
+recommendation, user confirms, system executes.
+
+Flow:
+Step 1: User selects ticker in dashboard
+Step 2: Agent analyzes and recommends:
+        - Best strategy for this ticker right now
+        - Why this strategy (full reasoning)
+        - Why NOT other strategies (comparison)
+        - Suggested entry price
+        - Suggested position size (Kelly)
+        - Stop loss level (ATR-based)
+        - Price target
+        - Risk/reward ratio
+        - All three signal scores shown
+
+Step 3: User chooses: EXECUTE / MODIFY / SKIP
+Step 4: If Execute → order placed on Alpaca paper
+Step 5: Position appears in live monitor
+Step 6: Agent monitors and suggests exit when:
+        - Signal weakens below threshold
+        - Stop loss approaches
+        - Target reached
+        - Sentiment reverses sharply
+        - Macro event changes thesis
+
+Step 7: User chooses: SELL ALL / SELL PARTIAL / HOLD
+
+================================================================
+MODE 2: AUTONOMOUS MULTI-AGENT TRADING
+================================================================
+Six specialized agents work together. No human input needed
+from market open to market close.
+
+AGENT 1: ORCHESTRATOR AGENT (Claude API)
+- Coordinates all other agents
+- Makes final trading decisions
+- Resolves conflicts between agents
+- Logs all decisions with reasoning
+- Generates daily research report
+
+AGENT 2: RESEARCH AGENT
+- Activates at market open (9:30 AM)
+- Scans full watchlist (20-50 tickers)
+- Runs complete signal pipeline on each
+- Produces ranked opportunity table
+- Feeds candidates to Orchestrator
+
+AGENT 3: SENTIMENT AGENT
+- Monitors NewsAPI continuously (every 15 min)
+- Scores breaking headlines with FinBERT
+- Updates sentiment scores in real time
+- Alerts Orchestrator on sharp sentiment changes
+- Detects earnings surprises, guidance changes
+
+AGENT 4: EVENT AGENT
+- Monitors keyword spike detector
+- Classifies macro events as they develop
+- Maps events to affected tickers immediately
+- Triggers emergency rebalancing when needed
+- Feeds event signal to Orchestrator
+
+AGENT 5: RISK AGENT
+- Monitors all open positions continuously
+- Enforces stop losses automatically
+- Tracks portfolio-level drawdown
+- Enforces exposure limits
+- Overrides other agents if risk limits breached
+- Risk Agent has veto power over all trade decisions
+
+AGENT 6: EXECUTION AGENT
+- Translates approved decisions into Alpaca orders
+- Tracks order fills and actual execution prices
+- Calculates real slippage vs expected
+- Confirms trades back to Orchestrator
+- Handles order rejections and retries
+
+AGENT 7: REPORTING AGENT
+- Tracks every decision and trade throughout day
+- Generates full end-of-day report
+- Calculates daily P&L per strategy
+- Compares vs S&P 500 benchmark
+- Sends WhatsApp summary at market close
+- Saves report to database for track record
+
+Trading Day Schedule:
+
+9:00 AM — Pre-market preparation
+  Research Agent scans overnight news
+  Sentiment Agent scores pre-market headlines
+  Event Agent checks for overnight macro events
+  Orchestrator prepares watchlist priorities
+
+9:30 AM — Market open routine
+  Research Agent runs full signal scan
+  Portfolio Manager selects top opportunities
+  Risk Agent approves position sizes
+  Execution Agent places opening orders
+  WhatsApp notification: trades placed + reasoning
+
+9:30 AM — 4:00 PM — Continuous monitoring
+  Every 15 minutes:
+  - Sentiment Agent scans new headlines
+  - Event Agent checks keyword spikes
+  - Risk Agent checks position health
+  - Stop losses enforced automatically
+  - Orchestrator evaluates any new opportunities
+
+  On sentiment reversal:
+  - Sentiment Agent alerts Orchestrator
+  - Orchestrator evaluates exit
+  - If confirmed: Execution Agent closes position
+  - WhatsApp notification with reasoning
+
+  On macro event detection:
+  - Event Agent alerts Orchestrator immediately
+  - Orchestrator calls emergency rebalancing
+  - Portfolio shifts toward event winners
+  - Execution Agent implements changes
+  - WhatsApp notification with full event analysis
+
+3:45 PM — End of day preparation
+  Orchestrator evaluates all positions
+  Decision: hold overnight vs close
+  Default: close all day-trade positions
+  Exception: high-conviction swing trades can hold
+
+4:00 PM — Market close routine
+  Execution Agent closes all day-trade positions
+  Reporting Agent compiles full daily report
+  All trades, decisions, and reasoning logged
+  WhatsApp daily summary sent
+  Dashboard updated with daily results
+
+================================================================
+WHATSAPP NOTIFICATION SYSTEM
+================================================================
+Platform: Twilio API (free sandbox available)
+Triggers: market open, trades placed, stop losses, events,
+          sentiment alerts, daily report
+
+Notification types:
+
+Morning digest (8:00 AM):
+- Yesterday recap: P&L, wins/losses, alpha vs S&P
+- Today watchlist: top signals, macro events to monitor
+- Strategy health: any warnings or alerts
+
+Trade notifications (real-time):
+- Trade placed: ticker, strategy, entry, size, reason
+- Stop loss triggered: ticker, loss, reason, what saved
+- Exit taken: ticker, P&L, exit reason, agent decision
+
+Event alerts (real-time):
+- Macro event detected: type, confidence, top plays
+- Sentiment reversal: ticker, score change, affected position
+- Portfolio rebalancing: what changed and why
+
+Daily report (4:30 PM):
+- Full P&L breakdown
+- Strategy comparison
+- Agent decision log
+- Cumulative track record update
+- Tomorrow's watchlist
+
+================================================================
+END OF DAY REPORT (PROOF OF PERFORMANCE)
+================================================================
+Generated every trading day. Saved to database.
+Displayed on platform track record page.
+
+Report contents:
+- Starting capital for the day
+- Ending capital
+- Net P&L (dollar and percentage)
+- S&P 500 performance same day
+- Alpha generated (your return minus S&P return)
+- Every trade: ticker, entry, exit, P&L, strategy, reasoning
+- Agent decisions with timestamps and reasoning
+- Strategy breakdown: which strategy earned most today
+- Cumulative track record: every day since launch
+- Running Sharpe ratio, max drawdown, win rate
+- Comparison: Autonomous Mode vs Assisted Mode vs S&P 500
+
+================================================================
+PERFORMANCE COMPARISON DASHBOARD
+================================================================
+The proof section. Shows everything side by side:
+
+Metrics tracked:
+- Daily P&L
+- Cumulative return since launch
+- Sharpe ratio (rolling)
+- Max drawdown
+- Win rate
+- Average win vs average loss
+- Profit factor (avg win / avg loss)
+- Alpha vs S&P 500
+- Alpha vs buy-and-hold major tickers
+
+Three columns always shown:
+- Autonomous Mode (agents trade independently)
+- Assisted Mode (user trades with AI guidance)
+- S&P 500 benchmark (what you get doing nothing)
+
+Per-strategy performance:
+- Momentum ML: total P&L, win rate, Sharpe
+- Mean Reversion: total P&L, win rate, Sharpe
+- Event-Driven: total P&L, win rate, Sharpe
+- Sentiment-Based: total P&L, win rate, Sharpe
+- Pattern Recognition: total P&L, win rate, Sharpe
+
+Agent decision quality:
+- How often did agent exit calls save money?
+- How often did stop losses prevent larger losses?
+- How often was event detection correct directionally?
+
+New Alpaca service endpoints:
+- GET /paper/portfolio — current positions and P&L
+- GET /paper/orders — today's order history
+- POST /paper/order — place new paper order
+- DELETE /paper/position/:ticker — close position
+- GET /paper/account — account value and buying power
+- GET /paper/track-record — full historical performance
+- GET /paper/daily-report?date=2026-03-15 — specific day
+
+New FastAPI endpoints:
+- POST /agent/start-session — start autonomous trading day
+- POST /agent/stop-session — stop and generate report
+- GET /agent/decision-log — all agent decisions today
+- GET /agent/daily-report — full day report
+- POST /agent/assisted-recommendation?ticker=AAPL
+- GET /agent/track-record — cumulative performance
+
+Libraries:
+- alpaca-trade-api — Alpaca paper trading
+- twilio — WhatsApp notifications
+- schedule — cron-style job scheduling
+- anthropic — Claude API for agent reasoning
+
+Timeline: 4-5 weeks (alongside Phase 9 deployment)
+
+IMPORTANT: Start Alpaca paper account as early as Phase 2.
+Every day of track record makes proof stronger.
+By August 2026 applications you want 4-5 months of history.
+
+
+----------------------------------------------------------------
+PHASE 9 — FRONTEND UPGRADE
+----------------------------------------------------------------
+Design direction:
+- Dark terminal aesthetic — Bloomberg terminal meets modern SaaS
+- Fonts: Bebas Neue (headers) + Space Mono (data) + DM Sans (body)
+- Colors: near-black background, green (#00FF88) positive,
+  red negative, amber neutral/warning
+- No purple gradients, no Inter font, no generic aesthetics
+
+Charts:
+- TradingView Lightweight Charts — candlestick + P&L + events
+- Monte Carlo fan chart
+- Efficient frontier scatter plot
+- Correlation heatmap
+- Equity curve vs S&P benchmark
+- Daily P&L bar chart
+
+Pages to build:
+
+1. Homepage
+   Public landing page. Live ticker tape, hero section,
+   feature showcase, signal demo with real data.
+
+2. Dashboard
+   Main app. Ticker input, strategy selector, run backtest,
+   full results with charts, signal breakdown.
+
+3. Signal View
+   Three-signal breakdown: price + sentiment + event.
+   Actual headlines that drove each score. Pattern detections.
+
+4. Event Monitor
+   Live macro event feed. Ranked LONG/SHORT opportunities.
+   Historical event study panel. Second-order effects.
+
+5. Strategy Lab
+   Side-by-side strategy comparison. Backtest metrics.
+   Walk-forward results. Alpha mining discovery feed.
+   New strategies found and validated shown here.
+
+6. Portfolio Manager
+   Watchlist scanner with ranked signals. Allocation
+   breakdown. Correlation heatmap. Rebalancing log
+   with reasoning. Drawdown guard status.
+
+7. Paper Trading — Live Monitor
+   Mode 1: Assisted trading interface with AI recommendation
+   panel. Enter ticker, get full recommendation, confirm trade.
+   Real-time position monitor showing open positions.
+
+   Mode 2: Autonomous trading dashboard showing all 7 agents
+   and what each is currently doing. Live trade feed.
+   Agent decision log with timestamps and reasoning.
+
+8. Track Record
+   THE PROOF PAGE. Cumulative equity curve vs S&P 500.
+   Daily P&L table for every trading day since launch.
+   Strategy comparison breakdown. Statistical validation.
+   Running Sharpe, max drawdown, win rate, alpha.
+   This page proves the project works with real data.
+
+9. Research Log
+   Saved backtest history per browser session.
+   Alpha mining results. Model performance metrics.
+   Honest evaluation: accuracy, F1, Sharpe per model.
+
+Key UI components:
+- Four-signal bar: price + sentiment + event + pattern
+- Agent status panel: 7 agents with current activity
+- Live trade feed: real-time Alpaca fills
+- Equity curve: portfolio value vs S&P over time
+- Daily P&L heatmap: calendar view of gains/losses
+- Event alert banner with ranked opportunities
+- Assisted trading recommendation panel
+- WhatsApp notification preview panel
+
+Timeline: 2-3 weeks
+
+
+----------------------------------------------------------------
+PHASE 10 — DEPLOYMENT
+----------------------------------------------------------------
+Total cost: $0 using free tiers.
+
+Services:
+- Frontend (React)    → Vercel (free, auto-deploys on git push)
+- Java Spring Boot    → Railway (free tier, port 8080)
+- Python FastAPI      → Railway (free tier, port 8000)
+- Database            → Supabase PostgreSQL (free, 500MB)
+- Cache               → Upstash Redis (free, 10k commands/day)
+- ML models           → Railway + HuggingFace Hub
+
+Environment variables:
+- ALPACA_API_KEY + ALPACA_SECRET_KEY
+- NEWS_API_KEY
+- ALPHA_VANTAGE_API_KEY
+- FRED_API_KEY
+- SUPABASE_URL + SUPABASE_ANON_KEY
+- UPSTASH_REDIS_URL + UPSTASH_REDIS_TOKEN
+- ANTHROPIC_API_KEY (Claude API for agents)
+- TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN (WhatsApp)
+
+Required disclaimers on platform (not optional):
+- "Paper trading only — simulated money, real market prices"
+- "Research and educational platform — not financial advice"
+- "Past paper trading results do not predict future returns"
+- "Event signals do not account for institutional execution speed"
+
+Timeline: 1-2 weeks
+
+
+----------------------------------------------------------------
+PHASE 11 — AGENTIC AI LAYER + ALPHA MINING PIPELINE
+----------------------------------------------------------------
+Goal: The most advanced layer. Autonomous research, strategy
+discovery, and multi-agent orchestration for paper trading.
+Only build after Phases 1-10 complete.
+
+================================================================
+ALPHA MINING PIPELINE
+================================================================
+Automated system that finds, tests, validates, and deploys
+new trading signals daily. This is what quant hedge funds do.
+
+Stage 1: Alpha Generation (daily, automated)
+- Claude with web search finds new research papers daily
+- Extracts signal hypotheses from academic papers
+- Translates into structured strategy specification JSON
+- Generates Python strategy code from specification
+
+Stage 2: Alpha Testing (automated for each candidate)
+- In-sample backtest (hypothesis validation)
+- Walk-forward validation (out-of-sample honesty)
+- Permutation test (is the edge statistically real?)
+- Cross-ticker validation (does it generalize?)
+- Regime validation (does it survive market changes?)
+- Transaction cost sensitivity (viable after costs?)
+- Bonferroni-corrected p-value (adjust for multiple testing)
+
+Stage 3: Alpha Diagnosis (Claude API interprets results)
+- Overfitting: in-sample much better than out-of-sample
+- Underfitting: both Sharpes low, no real edge
+- Weak edge: real but small, may not survive costs
+- Regime-dependent: works in some markets, fails others
+- No edge: permutation test shows no better than random
+
+Auto-fix loop:
+- If overfitting: reduce features, add regularization,
+  reduce lookback period, retest automatically
+- If underfitting: add features, increase complexity, retest
+- If fixable: auto-fix and retest before final decision
+- WhatsApp notification at each stage
+
+Stage 4: Alpha Deployment
+- Approved signals added to platform automatically
+- Appear in Strategy Lab discovery feed
+- Paper trading system uses them immediately
+- Track performance from day of deployment
+
+Stage 5: Alpha Monitoring
+- Live performance vs backtest prediction tracked daily
+- Drawdown circuit breaker per strategy
+- Signal drift detection (KS test on signal distribution)
+- Regime compatibility check ongoing
+- Strategy health score updated daily (0-100)
+
+Stage 6: Alpha Decay Management
+- Failing strategies deactivated automatically
+- Moved to Strategy Graveyard with cause of death
+- Causes: overfitting, regime change, crowding,
+  transaction costs, signal drift, drawdown exceeded
+- Lessons fed back to discovery criteria
+- Meta-learning makes future discovery smarter
+
+Strategy Graveyard:
+- Every failed strategy logged with full post-mortem
+- Date discovered, date deactivated, reason, final metrics
+- Pattern analysis: what types of strategies fail most?
+- This knowledge filters out bad candidates earlier
+
+Strategy Robustness Tests (all must pass before deployment):
+- Parameter sensitivity: performance stable across ±20% params
+- Cost sensitivity: viable at 0.2% transaction cost minimum
+- Monte Carlo permutation: beats randomly shuffled data
+- Multi-ticker: works on 70%+ of tested tickers
+- Multi-regime: profitable in at least 3 of 5 regimes
+- Consistency: walk-forward profitable in 7+ of 10 windows
+
+================================================================
+AGENTIC RESEARCH SYSTEM
+================================================================
+Claude-powered agent that orchestrates the full platform
+to answer any research question autonomously.
+
+Example queries the agent handles:
+- "Find the best opportunity in energy right now"
+- "US just announced China tariffs, what should I trade?"
+- "Build me a strategy that buys on RSI oversold + positive oil"
+- "Run an autonomous research loop on semiconductor stocks"
+- "Compare momentum vs mean reversion on FAANG stocks"
+
+Agent architecture:
+- Claude API as reasoning engine (claude-sonnet-4-20250514)
+- Every platform module is a callable tool
+- Agent decides which tools to call and in what order
+- Results fed back for interpretation and next steps
+- Generates full research report with evidence
+
+Full tool list:
+- fetch_data(ticker, period)
+- run_strategy(ticker, strategy_name)
+- get_price_signal(ticker)
+- get_ml_signal(ticker)
+- get_patterns(ticker)
+- get_sentiment_signal(ticker)
+- get_sentiment_delta(ticker)
+- detect_macro_events()
+- analyze_event(event_id)
+- get_affected_tickers(event_type)
+- get_historical_event_study(event_type, ticker)
+- get_second_order_effects(event_type)
+- get_beta(ticker, reference_asset)
+- get_combined_signal(ticker)
+- scan_watchlist(tickers)
+- allocate_capital(tickers, method)
+- get_correlation_matrix(tickers)
+- optimize_portfolio(tickers)
+- run_monte_carlo(ticker, strategy)
+- get_regime(ticker)
+- run_walk_forward_validation(ticker, strategy)
+- get_portfolio_rebalance(event_id)
+- get_drawdown_status()
+- get_portfolio_audit_log()
+- get_paper_positions()
+- get_track_record()
+- discover_new_strategies()
+- get_strategy_health(strategy_name)
+
+Libraries:
+- anthropic — Claude API agent reasoning
+- schedule — cron job for daily alpha mining
+- All existing FastAPI endpoints become agent tools
+
+Timeline: 4-6 weeks
+
+
+----------------------------------------------------------------
+COMPLETE TECHNOLOGY STACK
+----------------------------------------------------------------
+
+Languages:
+- Java          — execution engine, order simulation
+- Python        — ML, NLP, agents, event analysis, paper trading
+- JavaScript    — React frontend, UI, charts
+
+Backend Services:
+- Java Spring Boot    — port 8080, execution engine REST API
+- Python FastAPI      — port 8000, intelligence + trading layer
+- Node.js Express     — port 3000, API gateway (optional middleman)
+
+Databases:
+- MongoDB             — strategy configs, session history
+- PostgreSQL          — historical data, backtest results,
+                        paper trading records, agent logs
+- Redis               — real-time signal caching, live prices
+
+Data Sources:
+- yfinance            — OHLCV data, free, any ticker
+- Alpaca API          — real-time data + paper trading execution
+- NewsAPI             — financial and macro headlines
+- Alpha Vantage       — commodity prices (oil, gold, wheat)
+- FRED API            — macro economic data (free)
+- Reddit PRAW         — social sentiment
+- Seeking Alpha       — earnings transcripts (scraped)
+- Federal Reserve     — Fed statements (public)
+
+ML / DL Models:
+- XGBoost             — signal classification
+- LSTM (PyTorch)      — sequential price prediction
+- CNN (PyTorch)       — chart pattern recognition
+- Regime Classifier   — market state detection
+- FinBERT             — financial text sentiment
+- Claude API          — agent reasoning + alpha diagnosis
+- RL Agent (future)   — Stable Baselines3, PPO or DQN
+
+Python Libraries:
+- fastapi, uvicorn        — web service framework
+- pandas, numpy           — data processing
+- yfinance                — market data
+- ta                      — technical indicators
+- scikit-learn            — ML utilities and evaluation
+- xgboost                 — gradient boosting
+- torch                   — PyTorch deep learning
+- transformers            — HuggingFace FinBERT
+- scipy, scipy.stats      — optimization and statistics
+- alpaca-trade-api        — paper trading execution
+- newsapi-python          — news data
+- praw                    — Reddit API
+- requests, bs4           — web scraping
+- anthropic               — Claude API agent
+- twilio                  — WhatsApp notifications
+- schedule                — cron job scheduling
+
+Frontend:
+- React + Vite                 — main framework
+- TradingView Lightweight Charts — all financial charts
+- Tailwind CSS                 — styling
+- Recharts                     — supporting charts
+
+Deployment:
+- Vercel          — React frontend
+- Railway         — Java + Python services
+- Supabase        — PostgreSQL database
+- Upstash         — Redis cache
+- HuggingFace Hub — ML model storage
+
+
+----------------------------------------------------------------
+PHASE SUMMARY AND TIMELINE
+----------------------------------------------------------------
+
+Phase 0   — Understand existing code              1-2 weeks (NOW)
+Phase 1   — Own strategy layer                    2-3 weeks
+Phase 2   — Python FastAPI + Java Spring Boot     2-3 weeks
+Phase 3   — ML signal layer (XGBoost+LSTM+CNN)    3-4 weeks
+Phase 4A  — NLP sentiment (FinBERT)               2-3 weeks
+Phase 4B  — Event-driven macro analysis           2 weeks
+Phase 5   — Signal combiner (4 inputs)            1 week
+Phase 6   — Risk management module               2 weeks
+Phase 7   — Portfolio manager + optimizer         3-4 weeks
+Phase 8   — Live paper trading + multi-agent      4-5 weeks
+Phase 9   — Frontend upgrade (9 pages)            2-3 weeks
+Phase 10  — Deployment                            1-2 weeks
+Phase 11  — Alpha mining + agentic AI layer       4-6 weeks
+
+Total: approximately 6-7 months of consistent work
+
+DEPLOYMENT MILESTONES:
+After Phase 0: Deploy basic working version (get URL live now)
+After Phase 2: Deploy with real-time data (no more CSV)
+After Phase 3: ML recruiter URL ready
+After Phase 8: Paper trading track record starts accumulating
+After Phase 10: Full platform live, applications go out August 2026
+Phase 11 continues after applications submitted
+
+START ALPACA PAPER ACCOUNT NOW:
+Create free Alpaca account at alpaca.markets immediately.
+Every day of paper trading history = stronger proof.
+Target: 4-5 months of track record by August 2026.
+
+
+----------------------------------------------------------------
+PROJECT OUTPUTS — WHAT QUANTEDGE PRODUCES
+----------------------------------------------------------------
+
+Output 1: Backtest Results
+- For any ticker + strategy + time period
+- Performance metrics: return, Sharpe, drawdown, win rate
+- Trade history: every entry/exit with P&L
+- Walk-forward validation results
+- Statistical significance (p-value)
+- Candlestick chart with trade markers
+- P&L curve
+
+Output 2: Live Signal
+- For any ticker right now
+- BUY / SELL / HOLD decision
+- All four signal scores with reasoning
+- Suggested position size (Kelly)
+- Stop loss level
+- Which headlines drove the sentiment score
+
+Output 3: Event Analysis
+- When macro event detected
+- Ranked LONG and SHORT opportunity list
+- Historical precedent from past similar events
+- Second-order effects beyond obvious plays
+- Portfolio impact assessment
+
+Output 4: Portfolio Recommendation
+- For any watchlist of tickers
+- Optimal allocation with correlation adjustments
+- Efficient frontier visualization
+- Monte Carlo outcome distribution
+- Rebalancing suggestions
+
+Output 5: Agent Research Report
+- Answer to any natural language research question
+- Full reasoning chain visible
+- All data sources cited
+- Generated in under 60 seconds
+
+Output 6: Daily Paper Trading Report
+- Every trade made that day with full reasoning
+- Net P&L: dollar amount and percentage
+- Alpha vs S&P 500 benchmark
+- Strategy breakdown: which strategy earned most
+- Agent decision log with timestamps
+- Cumulative track record update
+
+Output 7: Alpha Mining Report
+- New strategies discovered from research
+- Test results for each candidate
+- Overfitting/underfitting diagnosis
+- Auto-fix attempts and results
+- Approved strategies added to platform
+- Rejected strategies with cause of rejection
+
+Output 8: WhatsApp Notifications
+- Morning digest with watchlist and health status
+- Real-time trade alerts with reasoning
+- Macro event alerts with ranked opportunities
+- Stop loss alerts showing what was saved
+- Daily P&L summary at market close
+
+
+----------------------------------------------------------------
+CRITICAL RULES — READ BEFORE EVERY SESSION
+----------------------------------------------------------------
+
+1. NO LOOKAHEAD BIAS
+   Every feature must use only past data, never future.
+   Most common mistake in student quant projects.
+   Looks great in backtest, fails immediately in production.
+
+2. WALK-FORWARD VALIDATION IS MANDATORY
+   Never evaluate a strategy on data it trained on.
+   In-sample results are always optimistic.
+   Out-of-sample results are what you actually get.
+
+3. OWN EVERY LINE OF CODE
+   Cannot explain it out loud = do not put it on resume.
+   Understand before you extend. Read before you write.
+
+4. HONEST RESUME CLAIMS ONLY
+   Only claim what is actually built and working.
+   Paper trading means Alpaca paper, not real money.
+   Deployed means live URL, not running on localhost.
+
+5. BUILD IN ORDER
+   Do not skip phases. Each is the foundation for the next.
+   Paper trading before agents are built = no intelligence.
+   Agents before tools are built = just a chatbot.
+
+6. PYTHON IS THE PRIORITY LANGUAGE
+   All ML, NLP, agents, and paper trading in Python.
+   Push FastAPI skeleton to GitHub now — even 50 lines.
+
+7. PAPER TRADING IS PROOF, NOT PRODUCT
+   This is a research and educational platform.
+   Paper trading proves the algorithms work statistically.
+   It is not investment advice. Label everything clearly.
+
+8. EVENT ANALYSIS EDGE IS NOT SPEED
+   You cannot beat institutional traders on reaction time.
+   Your edge is second-order analysis and position sizing.
+   Never claim otherwise on the platform or in interviews.
+
+9. STATISTICAL SIGNIFICANCE IS NON-NEGOTIABLE
+   A good-looking backtest may be luck.
+   Permutation test + walk-forward + Bonferroni correction.
+   Confirm edge is real before deploying or claiming it.
+
+10. START THE TRACK RECORD IMMEDIATELY
+    Create Alpaca paper account today.
+    Even running basic momentum strategy from day 1 counts.
+    Every day of documented history = stronger proof.
+    By August 2026 you want months of real data, not days.
+
+11. THE GRAVEYARD IS AS IMPORTANT AS THE WINNERS
+    Log every failed strategy with cause of death.
+    Showing you understand why strategies fail is as
+    impressive as showing strategies that work.
+    Honest analysis of failure = intellectual maturity.
+
+12. AGENTS MUST USE TOOLS, NOT MEMORY
+    Claude API system prompt must force tool usage.
+    Agent should never answer from general knowledge.
+    Every claim must be backed by a real tool call result.
+    This is what makes agent outputs trustworthy.
+
+
+----------------------------------------------------------------
+INTERVIEW TALKING POINTS
+----------------------------------------------------------------
+
+What to say when asked "tell me about your project":
+
+"I built QuantEdge — a systematic alpha research platform that
+automates the full signal lifecycle. The system has six layers:
+a price strategy layer with XGBoost and LSTM signal generation,
+an NLP sentiment layer using FinBERT on earnings transcripts
+and news, an event-driven macro layer that detects geopolitical
+and economic events and ranks affected stocks, a portfolio
+manager with correlation-aware allocation and Markowitz
+optimization, a live paper trading system with two modes —
+assisted where AI advises the user and autonomous where a
+multi-agent system trades independently — and an alpha mining
+pipeline that discovers, tests, and validates new trading
+signals from academic research daily.
+
+The platform has been running live paper trading on Alpaca
+since [date], generating [X]% return vs the S&P 500's [Y]%
+in the same period. The full track record is live at
+quantedge.vercel.app — you can see every trade, every agent
+decision, and every signal breakdown in real time."
+
+
+----------------------------------------------------------------
+END OF DOCUMENT
+----------------------------------------------------------------
+QuantEdge — Systematic Alpha Research Platform
+Owner: Kevin Sodhi (GitHub: kevin-sodhi)
+Version: 3.0 — Final
+Last updated: March 2026
+================================================================

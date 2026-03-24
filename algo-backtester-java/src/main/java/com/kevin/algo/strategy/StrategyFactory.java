@@ -19,7 +19,9 @@ public class StrategyFactory {
 
     public static Strategy create(String name) {
         return switch (name.toLowerCase()) {
-            case "macrossover" -> new MovingAverageCrossover();
+            case "macrossover"   -> new MovingAverageCrossover();
+            case "momentum"      -> new MomentumStrategy();
+            case "meanreversion" -> new MeanReversionStrategy();
             default -> throw new IllegalArgumentException("Unknown strategy: " + name);
         };
     }

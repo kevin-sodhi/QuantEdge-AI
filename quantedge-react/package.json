@@ -1,0 +1,21 @@
+{
+  "name": "quantedge-react",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names \"JAVA,PYTHON,REACT\" --prefix-colors \"blue,yellow,green\" \"cd ../algo-backtester-java && mvn spring-boot:run\" \"cd ../quantedge-python && python -m uvicorn main:app --port 8000 --reload\" \"vite\"",
+    "build":   "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lightweight-charts": "^4.1.3",
+    "react":              "^18.3.0",
+    "react-dom":          "^18.3.0",
+    "react-router-dom":   "^6.24.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently":         "^9.0.0",
+    "vite":                 "^5.3.0"
+  }
+}
