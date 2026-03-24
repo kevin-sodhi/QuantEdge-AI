@@ -15,49 +15,75 @@ fetch_indicators(ticker, period) → dict of indicator values for the
 """
 
 import io
-import time
-import yfinance as yf
+import os
+from datetime import datetime, timedelta
+import httpx
 import pandas as pd
 import ta
 
 
 VALID_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
 
+PERIOD_DAYS = {
+    "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
+    "1y": 365, "2y": 730, "5y": 1825, "10y": 3650,
+}
+
 
 def fetch_ohlcv(ticker: str, period: str = "1y") -> pd.DataFrame:
-    """Return OHLCV DataFrame indexed by date string."""
+    """Return OHLCV DataFrame indexed by date string using Alpha Vantage."""
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of: {sorted(VALID_PERIODS)}")
 
     ticker = ticker.upper().strip()
+    api_key = os.environ.get("ALPHA_VANTAGE_KEY", "")
+    if not api_key:
+        raise ValueError("ALPHA_VANTAGE_KEY environment variable not set.")
 
-    # Retry up to 3 times with backoff — Railway IPs get rate limited by Yahoo Finance
-    df = pd.DataFrame()
-    for attempt in range(3):
-        try:
-            t = yf.Ticker(ticker)
-            df = t.history(period=period, auto_adjust=True)
-            if not df.empty:
-                break
-            df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
-            if not df.empty:
-                break
-        except Exception:
-            pass
-        time.sleep(2 ** attempt)  # 1s, 2s, 4s
+    # full outputsize gives 20+ years; compact gives only 100 bars
+    outputsize = "compact" if period in ("1d", "5d", "1mo", "3mo") else "full"
+
+    url = (
+        f"https://www.alphavantage.co/query"
+        f"?function=TIME_SERIES_DAILY&symbol={ticker}"
+        f"&outputsize={outputsize}&apikey={api_key}"
+    )
+
+    resp = httpx.get(url, timeout=30)
+    resp.raise_for_status()
+    payload = resp.json()
+
+    if "Time Series (Daily)" not in payload:
+        note = payload.get("Note") or payload.get("Information") or payload.get("Error Message", "Unknown error")
+        raise ValueError(f"Alpha Vantage error for '{ticker}': {note}")
+
+    raw = payload["Time Series (Daily)"]
+    df = pd.DataFrame.from_dict(raw, orient="index")
+    df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+    df = df.rename(columns={
+        "1. open": "Open", "2. high": "High",
+        "3. low": "Low",  "4. close": "Close", "5. volume": "Volume"
+    })
+    df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+
+    # Filter to requested period
+    if period == "ytd":
+        start = datetime(datetime.now().year, 1, 1)
+        df = df[df.index >= start]
+    elif period == "max":
+        pass
+    else:
+        days = PERIOD_DAYS[period]
+        start = datetime.now() - timedelta(days=days)
+        df = df[df.index >= start]
 
     if df.empty:
         raise ValueError(f"No data returned for ticker '{ticker}'. Check the symbol.")
 
-    # Flatten MultiIndex columns that yfinance sometimes returns
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-    df.index = pd.to_datetime(df.index).strftime("%Y-%m-%d")
+    df.index = df.index.strftime("%Y-%m-%d")
     df.index.name = "Date"
-    df = df.dropna()
-    return df
+    return df.dropna()
 
 
 def fetch_ohlcv_csv(ticker: str, period: str = "1y") -> str:
