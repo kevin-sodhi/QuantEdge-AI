@@ -1,9 +1,9 @@
 const fs   = require('fs');
 const path = require('path');
 
-// Service URLs
-const PYTHON_SERVICE_URL = 'http://localhost:8000';
-const JAVA_SERVICE_URL   = 'http://localhost:8080';
+// Service URLs — override via env vars in Railway
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
+const JAVA_SERVICE_URL   = process.env.JAVA_SERVICE_URL   || 'http://localhost:8080';
 
 // FILES_DIR kept for legacy CSV download routes
 const FILES_DIR = path.resolve(__dirname, '..', '..', 'data');

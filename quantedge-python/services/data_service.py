@@ -53,6 +53,98 @@ def fetch_ohlcv_csv(ticker: str, period: str = "1y") -> str:
     return buf.getvalue()
 
 
+def generate_signal(ticker: str, strategy: str = "momentum", period: str = "1y") -> dict:
+    """
+    Evaluate a trading strategy on the latest live data and return a signal.
+
+    Strategies:
+      momentum      — EMA50 > EMA200 + RSI 50-70 + volume above average → BUY
+                      RSI > 70 → SELL, otherwise HOLD
+      macrossover   — EMA50 vs EMA200 trend direction (no prev bar needed)
+                      EMA50 > EMA200 → BUY trend, EMA50 < EMA200 → SELL trend
+      meanreversion — price below BB lower + RSI < 35 → BUY
+                      price above BB upper + RSI > 65 → SELL
+
+    Returns signal (BUY / SELL / HOLD), price, date, indicators used, and reasons.
+    """
+    ind = fetch_indicators(ticker, period)
+
+    price    = ind["last_close"]
+    rsi      = ind["rsi"]
+    ema50    = ind["ema50"]
+    ema200   = ind["ema200"]
+    bb_upper = ind["bb_upper"]
+    bb_lower = ind["bb_lower"]
+    vol_ratio = ind["volume_ratio"]
+
+    signal  = "HOLD"
+    reasons = []
+    used    = {}
+
+    strat = strategy.lower().replace(" ", "").replace("_", "")
+
+    if strat == "momentum":
+        used = {"rsi": rsi, "ema50": ema50, "ema200": ema200, "volume_ratio": vol_ratio}
+
+        if None in used.values():
+            signal = "HOLD"
+            reasons = ["Indicators not ready — insufficient data"]
+        elif ema50 > ema200 and 50 <= rsi <= 70 and vol_ratio > 1.0:
+            signal = "BUY"
+            reasons = ["EMA50 above EMA200 (uptrend)", "RSI in bullish range (50-70)", "Volume above average"]
+        elif rsi > 70:
+            signal = "SELL"
+            reasons = ["RSI overbought (> 70)"]
+        elif ema50 < ema200:
+            signal = "SELL"
+            reasons = ["EMA50 below EMA200 (downtrend)"]
+        else:
+            reasons = ["No confirmed signal — conditions not met"]
+
+    elif strat in ("macrossover", "macross", "movingaveragecrossover"):
+        used = {"ema50": ema50, "ema200": ema200}
+
+        if None in used.values():
+            signal = "HOLD"
+            reasons = ["Indicators not ready — insufficient data"]
+        elif ema50 > ema200:
+            signal = "BUY"
+            reasons = ["EMA50 above EMA200 — uptrend in effect"]
+        elif ema50 < ema200:
+            signal = "SELL"
+            reasons = ["EMA50 below EMA200 — downtrend in effect"]
+        else:
+            reasons = ["EMA50 equals EMA200 — no clear trend"]
+
+    elif strat in ("meanreversion", "meanrev"):
+        used = {"rsi": rsi, "bb_upper": bb_upper, "bb_lower": bb_lower}
+
+        if None in used.values():
+            signal = "HOLD"
+            reasons = ["Indicators not ready — insufficient data"]
+        elif price < bb_lower and rsi is not None and rsi < 35:
+            signal = "BUY"
+            reasons = ["Price below lower Bollinger Band", "RSI oversold (< 35)"]
+        elif price > bb_upper and rsi is not None and rsi > 65:
+            signal = "SELL"
+            reasons = ["Price above upper Bollinger Band", "RSI overbought (> 65)"]
+        else:
+            reasons = ["Price within Bollinger Bands — no mean reversion signal"]
+
+    else:
+        raise ValueError(f"Unknown strategy '{strategy}'. Use: momentum, macrossover, meanreversion")
+
+    return {
+        "ticker":     ticker.upper(),
+        "strategy":   strategy,
+        "signal":     signal,
+        "price":      price,
+        "date":       ind["last_date"],
+        "indicators": used,
+        "reasons":    reasons,
+    }
+
+
 def fetch_indicators(ticker: str, period: str = "1y") -> dict:
     """Compute technical indicators and return latest values."""
     df = fetch_ohlcv(ticker, period)

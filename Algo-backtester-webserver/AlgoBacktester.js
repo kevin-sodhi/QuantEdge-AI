@@ -24,12 +24,12 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
+const http = require('http');
 const session = require('express-session');
 const cors = require('cors');
 
 const app = express();
-const PORT = 3000; 
+const PORT = process.env.PORT || 3000;
 
 // ------------------------------------------------------------
 // 1) Service + route imports
@@ -53,15 +53,9 @@ const authRouter = require('./routes/auth');
 const { connectDBAndResetUsers } = require('./Database/db');
 
 // ------------------------------------------------------------
-// 2) HTTPS certificate setup
+// 2) HTTPS removed — Railway handles SSL termination externally.
+//    The app runs plain HTTP inside the container.
 // ------------------------------------------------------------
-// Uses a self-signed certificate for local HTTPS. `key.pem` and `cert.pem`
-// are generated on my machine and placed in this folder.
-
-const certificates = {
-  key: fs.readFileSync(path.join(__dirname, 'key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'cert.pem'))
-};
 
 // ------------------------------------------------------------
 // 3) View engine (Pug templates)
@@ -73,8 +67,11 @@ app.set('view engine', 'pug');
 // 4) Global middleware
 // ------------------------------------------------------------
 
-// Allow React dev server (Vite on port 5173) to call JSON API endpoints
-app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
+// Allow configured origins (dev: localhost, prod: Railway React URL)
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',')
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+app.use(cors({ origin: allowedOrigins }));
 
 // Serve static files (CSS, JS, images, plain HTML) from /public
 app.use('/public', express.static(path.join(__dirname, 'public')));
@@ -91,10 +88,10 @@ app.use(express.json());
 // - Session data (req.session.user, etc.) is stored in memory on the server.
 app.use(
   session({
-    secret: 'beckisbest',          // used to sign session cookie
+    secret: process.env.SESSION_SECRET || 'beckisbest',
     cookie: {
-      httpOnly: true,              // not accessible via client-side JS
-      maxAge: 1000 * 60 * 10       // 10 minutes
+      httpOnly: true,
+      maxAge: 1000 * 60 * 10
     }
   })
 );
@@ -208,8 +205,8 @@ app.use((err, req, res, next) => {
 
 connectDBAndResetUsers()
   .then(() => {
-    https.createServer(certificates, app).listen(PORT, () => {
-      console.log(`HTTPS app listening on https://localhost:${PORT}`);
+    http.createServer(app).listen(PORT, () => {
+      console.log(`HTTP app listening on port ${PORT}`);
     });
   })
   .catch((err) => {

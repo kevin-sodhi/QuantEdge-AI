@@ -4,6 +4,11 @@ import CandlestickChart from '../components/CandlestickChart.jsx';
 import BacktestForm     from '../components/BacktestForm.jsx';
 import MetricsTable     from '../components/MetricsTable.jsx';
 
+// In dev: env vars are empty → Vite proxy handles routing via vite.config.js
+// In prod (Railway): set VITE_PYTHON_URL and VITE_NODE_URL to Railway service URLs
+const PYTHON_URL = import.meta.env.VITE_PYTHON_URL || '';
+const NODE_URL   = import.meta.env.VITE_NODE_URL   || '';
+
 /** Normalise Python /data response → lightweight-charts candle format */
 function normaliseCandles(rawData) {
   return rawData
@@ -33,7 +38,8 @@ export default function Backtest() {
     setMetrics(null);
     setTicker(ticker);
     try {
-      const res  = await fetch(`/python/data?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}`);
+      const dataPath = PYTHON_URL ? `${PYTHON_URL}/data` : '/python/data';
+      const res  = await fetch(`${dataPath}?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}`);
       if (!res.ok) throw new Error(`Data fetch failed: ${res.status}`);
       const json = await res.json();
       setCandles(normaliseCandles(json.data || []));
@@ -56,7 +62,7 @@ export default function Backtest() {
     }
 
     try {
-      const res = await fetch('/api/backtest', {
+      const res = await fetch(`${NODE_URL}/api/backtest`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(params),
