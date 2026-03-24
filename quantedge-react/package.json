@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names \"JAVA,PYTHON,NODE,REACT\" --prefix-colors \"blue,yellow,cyan,green\" \"cd ../algo-backtester-java && mvn spring-boot:run\" \"cd ../quantedge-python && python -m uvicorn main:app --port 8000 --reload\" \"cd ../Algo-backtester-webserver && npm run dev\" \"vite\"",
+    "dev": "concurrently --kill-others-on-fail --names \"JAVA,PYTHON,REACT\" --prefix-colors \"blue,yellow,green\" \"cd ../algo-backtester-java && mvn spring-boot:run\" \"cd ../quantedge-python && python -m uvicorn main:app --port 8000 --reload\" \"vite\"",
     "build":   "vite build",
     "preview": "vite preview"
   },

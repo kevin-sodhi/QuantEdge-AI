@@ -6,10 +6,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // POST /api/backtest → Node.js Express (port 3000, HTTPS)
+      // POST /api/backtest → Python FastAPI (port 8000)
       '/api': {
-        target:  'https://localhost:3000',
-        secure:  false,   // accept self-signed cert
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       // GET /python/... → Python FastAPI (port 8000)
