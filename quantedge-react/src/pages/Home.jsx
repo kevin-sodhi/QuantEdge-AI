@@ -53,11 +53,7 @@ export default function Home() {
       <TickerTape />
 
       {/* Hero */}
-      <section style={{
-        paddingTop: '160px', paddingBottom: '6rem',
-        maxWidth: '1200px', margin: '0 auto', padding: '160px 2rem 6rem',
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'center',
-      }}>
+      <section className="hero-section">
         {/* Left copy */}
         <div>
           <div style={{
@@ -121,12 +117,11 @@ export default function Home() {
         </div>
       </section>
 
+      {/* end of hero section */}
+
       {/* Stats bar */}
       <div style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'var(--deep)' }}>
-        <div style={{
-          maxWidth: '1200px', margin: '0 auto', padding: '2rem',
-          display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', textAlign: 'center',
-        }}>
+        <div className="stats-grid">
           {STATS.map(s => (
             <div key={s.label}>
               <div style={{ fontFamily: 'var(--font-head)', fontSize: '2rem', color: 'var(--green)', letterSpacing: '0.04em' }}>
@@ -148,7 +143,7 @@ export default function Home() {
         }}>
           EVERYTHING YOU NEED TO <span style={{ color: 'var(--green)' }}>FIND ALPHA</span>
         </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+        <div className="features-grid">
           {FEATURES.map(f => (
             <div key={f.title} className="card" style={{
               transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -215,7 +210,7 @@ export default function Home() {
         textAlign: 'center', color: 'var(--muted)', fontSize: '0.8rem',
         fontFamily: 'var(--font-mono)',
       }}>
-        <p>© 2026 QuantEdge · Kevin Sodhi · Research tool — not financial advice</p>
+        <p>© 2026 QuantEdge · Kevin Sodhi · Research tool</p>
       </footer>
     </div>
   );

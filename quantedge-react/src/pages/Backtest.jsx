@@ -88,10 +88,10 @@ export default function Backtest() {
       <main style={{ paddingTop: '120px', paddingBottom: '4rem', maxWidth: '1300px', margin: '0 auto', padding: '120px 2rem 4rem' }}>
         {/* Header */}
         <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontFamily: 'var(--font-head)', fontSize: '2.5rem', letterSpacing: '0.06em', color: 'var(--white)' }}>
+          <h1 style={{ fontFamily: 'var(--font-head)', fontSize: 'clamp(1.6rem, 5vw, 2.5rem)', letterSpacing: '0.06em', color: 'var(--white)', wordBreak: 'break-word' }}>
             BACKTEST <span style={{ color: 'var(--green)' }}>{ticker || 'DASHBOARD'}</span>
           </h1>
-          <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+          <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '0.25rem', lineHeight: 1.6 }}>
             Live OHLCV data via yfinance · Java backtesting engine · Signal overlay
           </p>
         </div>
@@ -106,14 +106,23 @@ export default function Backtest() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.5rem', alignItems: 'start' }}>
-          {/* Left: Chart */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="backtest-layout">
+          {/* Form — order 1 on mobile, right col on desktop */}
+          <div className="backtest-form-col">
+            <BacktestForm
+              onLoadChart={handleLoadChart}
+              onRunBacktest={handleRunBacktest}
+              loading={loading}
+            />
+          </div>
+
+          {/* Chart — order 2 on mobile, left col on desktop */}
+          <div className="backtest-chart-col">
             <CandlestickChart candles={candles} signals={signals} height={460} />
 
             {/* Signal legend */}
             {signals.length > 0 && (
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem' }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--green)' }}>
                   ▲ BUY ({signals.filter(s => s.type === 'BUY').length})
                 </span>
@@ -124,15 +133,12 @@ export default function Backtest() {
             )}
           </div>
 
-          {/* Right: Form + Metrics */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <BacktestForm
-              onLoadChart={handleLoadChart}
-              onRunBacktest={handleRunBacktest}
-              loading={loading}
-            />
-            {metrics && <MetricsTable metrics={metrics} />}
-          </div>
+          {/* Metrics — order 3 on mobile, sits below form on desktop */}
+          {metrics && (
+            <div className="backtest-metrics-col">
+              <MetricsTable metrics={metrics} />
+            </div>
+          )}
         </div>
       </main>
     </div>

@@ -41,7 +41,8 @@ export default function Navbar() {
         QUANT<span style={{ color: 'var(--green)' }}>EDGE</span>
       </div>
 
-      <div style={styles.links}>
+      {/* Hidden on mobile */}
+      <div className="navbar-links" style={styles.links}>
         <span style={styles.link} onClick={() => navigate('/')}>Platform</span>
         <span style={styles.link} onClick={() => navigate('/')}>Strategies</span>
         <span style={styles.link} onClick={() => navigate('/')}>Research</span>
@@ -49,7 +50,8 @@ export default function Navbar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-        <div style={styles.status}>
+        {/* Hidden on mobile */}
+        <div className="navbar-status" style={styles.status}>
           <div style={styles.dot} />
           MARKETS OPEN · NYSE
         </div>
