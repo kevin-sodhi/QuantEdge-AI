@@ -1,0 +1,39 @@
+services:
+
+  java:
+    build:
+      context: ./algo-backtester-java
+    container_name: quantedge-java
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  python:
+    build:
+      context: ./quantedge-python
+    container_name: quantedge-python
+    ports:
+      - "8000:8000"
+    environment:
+      - JAVA_SERVICE_URL=http://java:8080
+      - CORS_ORIGIN=http://localhost
+    env_file:
+      - ./quantedge-python/.env
+    depends_on:
+      java:
+        condition: service_started
+
+  react:
+    build:
+      context: ./quantedge-react
+      args:
+        - VITE_PYTHON_URL=http://localhost:8000
+    container_name: quantedge-react
+    ports:
+      - "80:80"
+    depends_on:
+      - python

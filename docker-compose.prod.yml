@@ -1,0 +1,38 @@
+services:
+
+  java:
+    image: ${ECR_REGISTRY}/quantedge-java:${IMAGE_TAG}
+    container_name: quantedge-java
+    ports:
+      - "8080:8080"
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx300m -Xss256k
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  python:
+    image: ${ECR_REGISTRY}/quantedge-python:${IMAGE_TAG}
+    container_name: quantedge-python
+    ports:
+      - "8000:8000"
+    environment:
+      - JAVA_SERVICE_URL=http://java:8080
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - TWELVE_DATA_KEY=${TWELVE_DATA_KEY}
+    depends_on:
+      java:
+        condition: service_started
+    restart: unless-stopped
+
+  react:
+    image: ${ECR_REGISTRY}/quantedge-react:${IMAGE_TAG}
+    container_name: quantedge-react
+    ports:
+      - "80:80"
+    depends_on:
+      - python
+    restart: unless-stopped
