@@ -3,10 +3,11 @@
 .idea/
 
 # Node
-Algo-backtester-webserver/node_modules/
-Algo-backtester-webserver/npm-debug.log*
+node_modules/
+npm-debug.log*
 
 # Sensitive / secrets
+.env
 Algo-backtester-webserver/credentials.js
 Algo-backtester-webserver/cert.pem
 Algo-backtester-webserver/key.pem
