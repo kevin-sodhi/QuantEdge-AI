@@ -62,7 +62,7 @@ export default function Backtest() {
     }
 
     try {
-      const res = await fetch(`${NODE_URL}/api/backtest`, {
+      const res = await fetch(`${PYTHON_URL}/api/backtest`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(params),
