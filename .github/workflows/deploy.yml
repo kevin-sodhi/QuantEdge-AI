@@ -1,0 +1,75 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  ECR_REGISTRY: 799918207125.dkr.ecr.ca-central-1.amazonaws.com
+  AWS_REGION: ca-central-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Java image
+        run: |
+          docker build -t $ECR_REGISTRY/quantedge-java:${{ github.sha }} ./algo-backtester-java
+          docker push $ECR_REGISTRY/quantedge-java:${{ github.sha }}
+
+      - name: Build and push Python image
+        run: |
+          docker build -t $ECR_REGISTRY/quantedge-python:${{ github.sha }} ./quantedge-python
+          docker push $ECR_REGISTRY/quantedge-python:${{ github.sha }}
+
+      - name: Build and push React image
+        run: |
+          docker build \
+            --build-arg VITE_PYTHON_URL=http://52.60.86.82:8000 \
+            -t $ECR_REGISTRY/quantedge-react:${{ github.sha }} \
+            ./quantedge-react
+          docker push $ECR_REGISTRY/quantedge-react:${{ github.sha }}
+
+      - name: Copy compose file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: docker-compose.prod.yml
+          target: /home/ec2-user/quantedge/
+
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region ca-central-1 | \
+              docker login --username AWS --password-stdin 799918207125.dkr.ecr.ca-central-1.amazonaws.com
+
+            cd /home/ec2-user/quantedge
+
+            export ECR_REGISTRY=799918207125.dkr.ecr.ca-central-1.amazonaws.com
+            export IMAGE_TAG=${{ github.sha }}
+            export CORS_ORIGIN=http://52.60.86.82
+            export TWELVE_DATA_KEY=$(grep -E '^TWELVE_DATA_KEY' .env | cut -d= -f2-)
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
