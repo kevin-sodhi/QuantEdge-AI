@@ -1,6 +1,6 @@
 # QuantEdge
 
-A systematic algorithmic trading research platform for backtesting trading strategies on live market data. Built to showcase production-quality quant engineering for the Baruch MFE application.
+A systematic algorithmic trading research platform for backtesting trading strategies on live market data.
 
 **Live:** `http://52.60.86.82` · **Stack:** React 18 · FastAPI · Java Spring Boot · AWS EC2
 
@@ -281,4 +281,4 @@ The UI shows the degradation percentage and labels it: low / moderate / high ove
 
 ## Author
 
-Kevin Sodhi · [GitHub](https://github.com/kevin-sodhi) · Built for Baruch MFE application
+Kevin Sodhi · [GitHub](https://github.com/kevin-sodhi)
