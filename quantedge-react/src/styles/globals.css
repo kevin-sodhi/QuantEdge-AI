@@ -178,3 +178,7 @@ input:focus, select:focus { border-color: var(--green); }
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

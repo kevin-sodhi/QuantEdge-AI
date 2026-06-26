@@ -84,8 +84,11 @@ public class WalkForwardValidator {
         List<Candle> testData  = all.subList(splitIdx, all.size());
 
         // 2) Grid search on training data (macrossover only)
+        // Slow MA capped at 50 so the test window always has enough bars to warm up and trade.
+        // A 200-day slow MA needs 200 warmup bars — on any realistic test window (20-30% of data)
+        // that leaves almost no bars for actual signals, producing 0 trades and misleading results.
         int[]  fastCandidates = {3, 5, 8, 10, 15, 20};
-        int[]  slowCandidates = {20, 30, 50, 100, 200};
+        int[]  slowCandidates = {20, 30, 50};
         double bestSharpe = Double.NEGATIVE_INFINITY;
         int bestFast = fastCandidates[0];
         int bestSlow = slowCandidates[0];

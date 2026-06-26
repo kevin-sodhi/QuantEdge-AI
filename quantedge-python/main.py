@@ -18,6 +18,9 @@ Start:
 
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
@@ -36,6 +39,15 @@ class BacktestRequest(BaseModel):
     indicator: str = "sma"
     fast: int = 5
     slow: int = 20
+    initialCapital: float = 10000
+
+
+class WalkForwardRequest(BaseModel):
+    ticker: str
+    period: str = "2y"
+    strategy: str = "macrossover"
+    indicator: str = "sma"
+    trainRatio: float = 0.7
     initialCapital: float = 10000
 
 app = FastAPI(
@@ -179,6 +191,57 @@ async def run_backtest(req: BacktestRequest):
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             java_res = await client.post(f"{JAVA_SERVICE_URL}/api/backtest", json=payload)
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502, detail="Cannot reach Java service at port 8080")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Java service error: {e}")
+
+    if java_res.status_code != 200:
+        raise HTTPException(status_code=java_res.status_code, detail=java_res.text)
+
+    return java_res.json()
+
+
+@app.post("/api/walk-forward")
+async def run_walk_forward(req: WalkForwardRequest):
+    """Fetch OHLCV data then run walk-forward validation on the Java engine."""
+    if not req.ticker:
+        raise HTTPException(status_code=400, detail="ticker is required")
+    if not (0.5 <= req.trainRatio <= 0.9):
+        raise HTTPException(status_code=400, detail="trainRatio must be between 0.5 and 0.9")
+
+    try:
+        df = fetch_ohlcv(req.ticker.upper(), req.period)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Data fetch failed: {e}")
+
+    candles = [
+        {
+            "date":   str(row.get("Date", row.get("date", ""))),
+            "open":   row.get("Open",   row.get("open")),
+            "high":   row.get("High",   row.get("high")),
+            "low":    row.get("Low",    row.get("low")),
+            "close":  row.get("Close",  row.get("close")),
+            "volume": row.get("Volume", row.get("volume")),
+        }
+        for row in df.reset_index().to_dict(orient="records")
+    ]
+
+    payload = {
+        "candles":        candles,
+        "ticker":         req.ticker.upper(),
+        "period":         req.period,
+        "strategy":       req.strategy,
+        "indicator":      req.indicator,
+        "trainRatio":     req.trainRatio,
+        "initialCapital": req.initialCapital,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            java_res = await client.post(f"{JAVA_SERVICE_URL}/api/walk-forward", json=payload)
     except httpx.ConnectError:
         raise HTTPException(status_code=502, detail="Cannot reach Java service at port 8080")
     except Exception as e:
