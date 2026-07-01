@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -118,5 +119,114 @@ class MetricsCalculatorTest {
         List<EquityPoint> equity = List.of(eq(0, 10_000), eq(1, 10_100), eq(2, 10_200));
         Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
         assertEquals(3, m.barsRead);
+    }
+
+    // ---- Sortino --------------------------------------------------------
+
+    @Test
+    void sortinoZeroWhenFlatReturns() {
+        List<EquityPoint> equity = List.of(eq(0, 10_000), eq(1, 10_000), eq(2, 10_000));
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertEquals(0.0, m.sortino, 1e-9);
+    }
+
+    @Test
+    void sortinoPositiveForProfitableStrategy() {
+        // Mix of gains and small losses — net positive, so Sortino should be positive
+        List<EquityPoint> equity = new ArrayList<>();
+        double e = 10_000;
+        double[] pattern = {0.01, 0.008, -0.002, 0.012, 0.005, -0.001, 0.009};
+        for (int i = 0; i < 40; i++) {
+            equity.add(new EquityPoint(D.plusDays(i), e));
+            e *= (1 + pattern[i % pattern.length]);
+        }
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertTrue(m.sortino > 0, "Sortino should be positive for a net-profitable strategy");
+    }
+
+    @Test
+    void sortinoHigherThanSharpeWhenLossesSmallRelativeToGains() {
+        // Large upside swings, tiny downside → Sortino > Sharpe
+        // Sharpe penalises all volatility equally; Sortino only penalises losses
+        List<EquityPoint> equity = new ArrayList<>();
+        double e = 10_000;
+        double[] pattern = {0.02, 0.02, -0.001, 0.02, 0.02, -0.001};
+        for (int i = 0; i < 60; i++) {
+            equity.add(new EquityPoint(D.plusDays(i), e));
+            e *= (1 + pattern[i % pattern.length]);
+        }
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertTrue(m.sortino > m.sharpe,
+                "Sortino (" + m.sortino + ") should exceed Sharpe (" + m.sharpe + ") when losses are tiny relative to gains");
+    }
+
+    // ---- Calmar ---------------------------------------------------------
+
+    @Test
+    void calmarZeroWhenNoDrawdown() {
+        List<EquityPoint> equity = List.of(eq(0, 10_000), eq(1, 10_100), eq(2, 10_200));
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertEquals(0.0, m.calmar, 1e-9);
+    }
+
+    @Test
+    void calmarPositiveWhenReturnExceedsDrawdown() {
+        // Rising equity with a small dip — positive total return, small drawdown → positive Calmar
+        List<EquityPoint> equity = List.of(
+                eq(0, 10_000),
+                eq(1, 11_000),
+                eq(2, 10_500), // small dip
+                eq(3, 12_000)
+        );
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertTrue(m.calmar > 0, "Calmar should be positive when strategy is profitable");
+    }
+
+    @Test
+    void calmarNegativeWhenNetLoss() {
+        List<EquityPoint> equity = List.of(
+                eq(0, 10_000),
+                eq(1, 9_500),
+                eq(2, 9_000)
+        );
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertTrue(m.calmar < 0, "Calmar should be negative when strategy loses money");
+    }
+
+    // ---- Bootstrap Sharpe CI --------------------------------------------
+
+    @Test
+    void ciLowAlwaysLessThanOrEqualHigh() {
+        List<EquityPoint> equity = new ArrayList<>();
+        double e = 10_000;
+        for (int i = 0; i < 100; i++) {
+            equity.add(new EquityPoint(D.plusDays(i), e));
+            e *= (1 + (Math.sin(i) * 0.01)); // oscillating returns
+        }
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertTrue(m.sharpeCI95Low <= m.sharpeCI95High,
+                "CI low must be <= CI high");
+    }
+
+    @Test
+    void ciContainsPointEstimate() {
+        List<EquityPoint> equity = new ArrayList<>();
+        double e = 10_000;
+        for (int i = 0; i < 200; i++) {
+            equity.add(new EquityPoint(D.plusDays(i), e));
+            e *= 1.0008;
+        }
+        Result.Metrics m = MetricsCalculator.compute(List.of(), equity, 10_000.0);
+        assertTrue(m.sharpeCI95Low <= m.sharpe && m.sharpe <= m.sharpeCI95High,
+                "Point Sharpe (" + m.sharpe + ") should fall within CI [" + m.sharpeCI95Low + ", " + m.sharpeCI95High + "]");
+    }
+
+    @Test
+    void bootstrapCIReproducibleWithSameSeed() {
+        double[] returns = {0.01, -0.005, 0.008, 0.003, -0.002, 0.006, -0.001, 0.004};
+        double[] ci1 = MetricsCalculator.bootstrapSharpeCI(returns, 100, new Random(42));
+        double[] ci2 = MetricsCalculator.bootstrapSharpeCI(returns, 100, new Random(42));
+        assertEquals(ci1[0], ci2[0], 1e-9);
+        assertEquals(ci1[1], ci2[1], 1e-9);
     }
 }

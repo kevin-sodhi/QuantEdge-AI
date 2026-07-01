@@ -39,6 +39,10 @@ public class Result {
         public double winRatePct;
         public double maxDrawdown;
         public double sharpe;
+        public double sortino;
+        public double calmar;
+        public double sharpeCI95Low;
+        public double sharpeCI95High;
     }
 
     // ---- Main result body ----
